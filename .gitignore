@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+
+# 构建产物（dist 对 npm 发布需要，但源码仓库不提交；发布时 build 生成）
+dist/
+
+# 打包产物
+*.tgz
+*.tar.gz
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 运行时状态（绝不含用户数据）
+*.corrupt-*
+.vitest-report.json

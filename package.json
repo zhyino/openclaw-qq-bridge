@@ -1,0 +1,119 @@
+{
+  "name": "openclaw-qq-bridge",
+  "displayName": "OpenClaw QQ Bridge",
+  "version": "0.3.2",
+  "description": "OpenClaw OneBot 11 channel plugin for QQ (SnowLuma/NapCat). Hardened: unified outbound gate, media path whitelist, execFile voice pipeline, CQ escaping, owner commands, slang learning.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "scripts",
+    "openclaw.plugin.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhyino/openclaw-qq-bridge.git"
+  },
+  "homepage": "https://github.com/zhyino/openclaw-qq-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/zhyino/openclaw-qq-bridge/issues"
+  },
+  "author": "QQ Bridge Contributors",
+  "license": "MIT",
+  "clawdbot": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "runtimeExtensions": [
+      "./dist/index.js"
+    ]
+  },
+  "moltbot": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "runtimeExtensions": [
+      "./dist/index.js"
+    ]
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "setupEntry": "./dist/setup-entry.js",
+    "runtimeExtensions": [
+      "./dist/index.js"
+    ],
+    "install": {
+      "minHostVersion": ">=2026.10.8"
+    },
+    "compat": {
+      "pluginApi": ">=2026.10.8",
+      "minGatewayVersion": "2026.10.8"
+    },
+    "build": {
+      "openclawVersion": "2026.10.8",
+      "bundledDist": false
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepack": "npm run build",
+    "pack:dry-run": "npm pack --dry-run",
+    "publish:dry-run": "npm publish --dry-run",
+    "prepare:clawhub": "npm run prepare:clawhub:package && npm run prepare:clawhub:skill",
+    "prepare:clawhub:package": "npm run prepare:clawhub:plugin",
+    "prepare:clawhub:plugin": "npm run build && node ./scripts/prepare-clawhub-plugin.mjs",
+    "prepare:clawhub:skill": "node ./scripts/prepare-clawhub-skill.mjs",
+    "react-test": "node ./scripts/react-test.mjs",
+    "release:check": "npm run typecheck && npm run build && npm test && npm run pack:dry-run && npm run publish:dry-run && npm run prepare:clawhub",
+    "test": "vitest run --reporter=default --reporter=json --outputFile=.vitest-report.json && node scripts/check-test-count.mjs",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "sync:openclaw-cli": "node ./scripts/sync-openclaw-cli.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.test.json",
+    "audit:prod": "npm audit --omit=dev",
+    "verify": "npm run typecheck && npm run manifest:check && npm test && npm run audit:prod",
+    "typecheck:src": "tsc --noEmit -p tsconfig.json",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "manifest:check": "node scripts/check-manifest-fields.mjs",
+    "test:fast": "vitest run"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  },
+  "bundledDependencies": [
+    "ws"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "ajv": "^8.20.0",
+    "openclaw": "^2026.10.8",
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.9"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.10.8 <2027"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "bundleDependencies": [
+    "ws"
+  ],
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "qq",
+    "onebot",
+    "snowluma",
+    "napcat",
+    "chatbot"
+  ]
+}
