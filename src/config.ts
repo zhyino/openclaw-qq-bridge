@@ -124,6 +124,7 @@ export function resolveOneBotAccount(
     ignoreFrom: accountConfig.ignoreFrom,
     ignoreBots: accountConfig.ignoreBots !== false,
     botMinIntervalSec: accountConfig.botMinIntervalSec ?? 60,
+    outboundRateLimit: accountConfig.outboundRateLimit ?? 0,
     config: accountConfig,
   };
 }

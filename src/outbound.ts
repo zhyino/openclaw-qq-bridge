@@ -62,8 +62,40 @@ export class SystemNoticeMutedError extends Error {
   }
 }
 
+/**
+ * Thrown when a reply is rate-limited (outbound anti-flood guard). Callers
+ * treat it as a silent no-op — the reply is intentionally dropped so two bots
+ * cannot loop into a flood.
+ */
+export class OutboundRateLimitedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OutboundRateLimitedError";
+  }
+}
+
 const CONTROL_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
+
+// Outbound anti-flood: `to -> last admitted send timestamp`. When enabled
+// (outboundMinIntervalSec), a reply to the same target is admitted at most
+// once per interval, so two bots cannot loop into a flood. Explicit replies
+// (replyToId present — e.g. answering an @) are exempt.
+const outboundLastSent = new Map<string, number>();
+
+function isOutboundRateLimited(
+  account: ResolvedOneBotAccount,
+  to: string,
+  replyToId?: string | null,
+): boolean {
+  if (!account.outboundRateLimit) return false;
+  if (replyToId != null && String(replyToId).trim() !== "") return false; // explicit reply exempt
+  const now = Date.now();
+  const last = outboundLastSent.get(to) ?? 0;
+  if (now - last < account.outboundRateLimit * 1000) return true;
+  outboundLastSent.set(to, now);
+  return false;
+}
 
 // ── Transport ────────────────────────────────────────────────────────────────
 
@@ -305,6 +337,14 @@ export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
   }
 
   try {
+    // Outbound anti-flood: drop an un-explicit reply to a target sent too soon
+    // after the previous one (silently, like a muted notice).
+    if (isOutboundRateLimited(account, to, replyToId)) {
+      throw new OutboundRateLimitedError(
+        `outbound rate-limited: ${to} (interval ${account.outboundRateLimit}s)`,
+      );
+    }
+
     const { result } = await dispatchSend(account, to, buildMessage(text, replyToId), { auditText: text });
 
     if (result.retcode !== 0) {
@@ -320,8 +360,9 @@ export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
       messageId: data?.message_id != null ? String(data.message_id) : undefined,
     };
   } catch (err) {
-    // A muted system notice is a deliberate silent drop: no error, no log.
-    if (err instanceof SystemNoticeMutedError) {
+    // A muted system notice or a rate-limited reply is a deliberate silent
+    // drop: no error, no log.
+    if (err instanceof SystemNoticeMutedError || err instanceof OutboundRateLimitedError) {
       return { channel: "onebot" };
     }
     return { channel: "onebot", error: err instanceof Error ? err.message : String(err) };

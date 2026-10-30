@@ -45,6 +45,12 @@ export interface OneBotAccountConfig {
   ignoreBots?: boolean;
   /** Minimum seconds between admitted messages from the same bot (default 60). */
   botMinIntervalSec?: number;
+  /**
+   * Outbound anti-flood: minimum seconds between replies to the same target
+   * (`group:<id>` / `private:<id>`). Explicit replies (replyToId present) are
+   * exempt. Default 0 = disabled.
+   */
+  outboundRateLimit?: number;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -77,6 +83,8 @@ export interface ResolvedOneBotAccount {
   ignoreBots: boolean;
   /** Minimum seconds between admitted messages from the same bot (default 60). */
   botMinIntervalSec: number;
+  /** Outbound anti-flood: minimum seconds between replies to the same target. 0 = disabled. */
+  outboundRateLimit: number;
   config: OneBotAccountConfig;
 }
 

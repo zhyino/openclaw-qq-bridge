@@ -306,3 +306,93 @@ describe('outbound', () => {
     expect(res.error).toMatch(/reaction network down/);
   });
 });
+
+describe('outbound rate limit (outboundRateLimit)', () => {
+  const oldFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = oldFetch;
+    vi.restoreAllMocks();
+  });
+
+  // Use unique targets per test to avoid cross-test state in the module-level map.
+  it('silently drops a second reply to the same target within the interval', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 7 } }),
+    });
+
+    const account = mkAccount({ outboundRateLimit: 60 });
+    const to = `private:${900000 + Math.floor(Math.random() * 100000)}`;
+
+    const first = await sendText({ to, text: 'first reply', account });
+    expect(first.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
+
+    const second = await sendText({ to, text: 'second reply', account });
+    // Rate-limited: no error, no fetch.
+    expect(second.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
+  });
+
+  it('allows replies to different targets regardless of the interval', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 8 } }),
+    });
+
+    const account = mkAccount({ outboundRateLimit: 60 });
+    const a = `private:${910000 + Math.floor(Math.random() * 100000)}`;
+    const b = `private:${920000 + Math.floor(Math.random() * 100000)}`;
+
+    await sendText({ to: a, text: 'to a', account });
+    const second = await sendText({ to: b, text: 'to b', account });
+
+    expect(second.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(2);
+  });
+
+  it('exempts explicit replies (replyToId present) from the rate limit', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 9 } }),
+    });
+
+    const account = mkAccount({ outboundRateLimit: 60 });
+    const to = `private:${930000 + Math.floor(Math.random() * 100000)}`;
+
+    await sendText({ to, text: 'first', account });
+    const second = await sendText({ to, text: 'explicit reply', replyToId: '12345', account });
+
+    expect(second.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(2);
+  });
+
+  it('does not rate-limit when outboundRateLimit is 0 (disabled)', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 10 } }),
+    });
+
+    const account = mkAccount({ outboundRateLimit: 0 });
+    const to = `private:${940000 + Math.floor(Math.random() * 100000)}`;
+
+    await sendText({ to, text: 'one', account });
+    const second = await sendText({ to, text: 'two', account });
+
+    expect(second.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(2);
+  });
+});

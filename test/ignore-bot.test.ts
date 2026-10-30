@@ -65,7 +65,7 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
     vi.restoreAllMocks();
   });
 
-  it('admits a bot message, then rate-limits the same bot within the interval', async () => {
+  it('forwards bot messages inbound (no inbound bot filter anymore)', async () => {
     // The bot lookup hits get_group_member_info; respond is_robot:true.
     (globalThis.fetch as any).mockImplementation((url: string) => {
       if (String(url).includes('/get_group_member_info')) {
@@ -106,18 +106,19 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
 
     await readyP;
 
-    // First bot message is admitted (rate-limit window is empty).
+    // First bot message is admitted (no inbound filter — full context).
     runtimeState.state.lastDispatchArgs = null;
     wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot says hi'));
     await vi.waitFor(() => {
       expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
     }, { timeout: 5000 });
 
-    // Second message from the same bot within 60s is rate-limited (dropped).
+    // Second message from the same bot is ALSO admitted (no inbound throttle).
     runtimeState.state.lastDispatchArgs = null;
     wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot says again'));
-    await new Promise((r) => setTimeout(r, 1800));
-    expect(runtimeState.state.lastDispatchArgs).toBeNull();
+    await vi.waitFor(() => {
+      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
+    }, { timeout: 5000 });
 
     ac.abort();
     await runP;

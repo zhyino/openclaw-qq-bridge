@@ -117,47 +117,6 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     }, delay);
   };
 
-  // Per-gateway cache of `group_id:user_id -> is_robot`. One HTTP lookup per
-  // member; never re-queries the same member on every message.
-  const robotCache = new Map<string, boolean>();
-  // Last admitted timestamp per bot user id — a bot is admitted at most once
-  // per botMinIntervalSec so two bots can talk without flooding the group.
-  const botLastAdmitted = new Map<string, number>();
-
-  /**
-   * Group-membership bot check via SnowLuma's `get_group_member_info`
-   * (`is_robot` field — reliable for real bots; NTQQ-logged accounts report
-   * false, so a false result may still be a bot, but a true result is always
-   * a bot). Failures are NOT treated as bot (don't drop a human's message).
-   */
-  const isRobotMember = async (groupId: string | number, senderId: string): Promise<boolean> => {
-    const key = `${groupId}:${senderId}`;
-    const cached = robotCache.get(key);
-    if (cached !== undefined) return cached;
-
-    try {
-      const url = `${account.httpUrl}/get_group_member_info`;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (account.accessToken) headers.Authorization = `Bearer ${account.accessToken}`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ group_id: Number(groupId), user_id: Number(senderId) }),
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) return false;
-      const body = (await response.json()) as {
-        data?: { is_robot?: boolean };
-      };
-      const robot = body.data?.is_robot === true;
-      robotCache.set(key, robot);
-      return robot;
-    } catch {
-      // Network/parse failure: do not drop the message on a flaky lookup.
-      return false;
-    }
-  };
-
   /**
    * Ingest one message: filter, intercept control commands, then buffer.
    * Control commands are handled here (before coalescing) so that
@@ -178,25 +137,12 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
     if (event.user_id === event.self_id) return;
 
-    // Bot-loop guard: manual ignore list first (fast, no network), then the
-    // automatic is_robot check for group members — rate-limited, not dropped:
-    // a bot's message is admitted once per botMinIntervalSec, so the agent can
-    // still talk to a bot without the two flooding the group.
+    // Manual ignore list (fast, no network). Automatic bot rate-limiting
+    // happens on OUTBOUND (see outbound.ts) so bot messages still reach the
+    // agent with full context — we only throttle how often we reply.
     if (isIgnoredSender(account, senderId)) {
       log?.info(`${tag} ignoring message from ignored sender ${senderId} (ignoreFrom)`);
       return;
-    }
-    if (isGroup && account.ignoreBots && (await isRobotMember(event.group_id!, senderId))) {
-      const now = Date.now();
-      const last = botLastAdmitted.get(senderId) ?? 0;
-      if (now - last < account.botMinIntervalSec * 1000) {
-        log?.info(
-          `${tag} rate-limiting bot member ${senderId} (next admit in ${Math.max(0, Math.ceil((account.botMinIntervalSec * 1000 - (now - last)) / 1000))}s)`,
-        );
-        return;
-      }
-      botLastAdmitted.set(senderId, now);
-      log?.info(`${tag} admitting bot member ${senderId} (is_robot, rate-limited)`);
     }
 
     const text = extractText(event.message, { selfId: event.self_id }) || event.raw_message;

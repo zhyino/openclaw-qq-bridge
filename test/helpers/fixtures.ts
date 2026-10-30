@@ -26,6 +26,7 @@ export function makeAccount(
     muteSystemNotices: true,
     ignoreBots: true,
     botMinIntervalSec: 60,
+    outboundRateLimit: 0,
     config: {},
     ...overrides,
   };

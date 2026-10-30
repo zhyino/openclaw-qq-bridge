@@ -44,6 +44,7 @@ function makeAccount(overrides: Partial<ResolvedOneBotAccount> = {}): ResolvedOn
     muteSystemNotices: true,
     ignoreBots: true,
     botMinIntervalSec: 60,
+    outboundRateLimit: 0,
     config: {},
     ...overrides,
   };
