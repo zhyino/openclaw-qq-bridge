@@ -10,6 +10,7 @@ import {
   validateOneBotConfig,
 } from "./config.js";
 import { reactToMessage, sendImage, sendRecord, sendText, uploadFile } from "./outbound.js";
+import { buildQzoneAndProfileTools } from "./qzone-tools.js";
 import { startGateway } from "./gateway.js";
 import { assertOutboundAllowed } from "./policy.js";
 import { parseTarget } from "./target.js";
@@ -318,5 +319,15 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
       lastConnectedAt: runtime?.lastConnectedAt ?? null,
       lastError: runtime?.lastError ?? null,
     }),
+  },
+  agentTools: ({ cfg }) => {
+    if (!cfg) {
+      return [];
+    }
+    const account = resolveOneBotAccount(cfg);
+    if (!account.enabled || !account.httpUrl) {
+      return [];
+    }
+    return buildQzoneAndProfileTools(account);
   },
 };

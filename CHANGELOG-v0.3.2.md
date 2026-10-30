@@ -143,3 +143,36 @@ found 0 vulnerabilities
 
 - `ownerQQ` 是单值，一个账号只能有一个主人。多人共用一个 QQ 号时，非主人发 `/silent` 等命令会被**静默吞掉**，没有任何回执。
 - `/silent`、`/role` 的状态存在全局单文件 `~/.openclaw/qq-bridge-state.json`，不分账号、不分会话。一个主人执行 `/silent` 会让所有会话一起静默。
+
+---
+
+## 七、追加：QQ 空间 / 个人签名能力（agentTools）
+
+（2026-10-29 补充，随 SDK 2026.10.8 适配一并落地）
+
+### 背景
+
+SnowLuma 后端原生暴露一组 OneBot **扩展 action**（非 OneBot v11 标准），覆盖 QQ 空间与个人资料。本插件此前只实现了消息/文件/表情三组动作，未接这些扩展。本版通过 `ChannelPlugin.agentTools` 暴露给 agent。
+
+### 新增工具（10 个）
+
+| 工具 | 后端 action | 读写 | 说明 |
+| --- | --- | --- | --- |
+| `qq_qzone_list` | `get_qzone_msg_list` | 读 | 空间说说列表；`target_uin` 可看好友空间 |
+| `qq_qzone_feeds` | `get_qzone_feeds` | 读 | 好友动态首页，游标分页 |
+| `qq_qzone_detail` | `get_qzone_msg_detail` | 读 | 单条说说详情（含内联评论） |
+| `qq_qzone_send` | `send_qzone_msg` | **写** | 发说说（文字/带图，`ugc_right` 权限） |
+| `qq_qzone_delete` | `delete_qzone_msg` | **写** | 删说说（不可恢复） |
+| `qq_qzone_like` | `like_qzone` | **写** | 点赞 |
+| `qq_qzone_unlike` | `unlike_qzone` | **写** | 取消点赞 |
+| `qq_qzone_comment` | `comment_qzone` | **写** | 评论（可带图） |
+| `qq_profile_set` | `set_qq_profile` | **写** | 改资料（`personal_note`=个性签名） |
+| `qq_online_status_set` | `set_diy_online_status` | **写** | 自定义在线状态文案 |
+
+### 设计要点
+
+- **实现位置**：`src/qzone-tools.ts`（独立模块），`channel.ts` 通过 `agentTools` factory 挂载；每次调用时解析当前账号配置。
+- **调用通道**：复用 `httpUrl` + `accessToken` 的 HTTP POST 模式，`AbortSignal.timeout(15s)` 兜底，`retcode`/`status` 错误透传为可读文本。
+- **安全边界**：写操作工具（发/删/点赞/评论/改签名）会真实对外生效——agent 是否被允许调用这些工具由宿主的 `tools` 策略控制，插件本身不绕过；只读工具（看空间/看动态）无白名单限制。
+- **风控提示**：`send_qzone_msg` 高频发布会被 QQ 空间风控（SnowLuma 官方注释明确），调用方需自行限流。
+- **测试**：`test/qzone-tools.test.ts` 新增 12 用例（注册齐全、参数构造、错误透传、网络失败不抛异常）。全量 **21 files / 230 passed**。
