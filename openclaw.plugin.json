@@ -403,5 +403,8 @@
         }
       }
     }
+  },
+  "doctorContract": {
+    "stateMigrations": false
   }
 }

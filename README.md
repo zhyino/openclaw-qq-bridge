@@ -29,7 +29,7 @@ openclaw gateway restart
 
 或手动复制到 `~/.openclaw/extensions/` 后 `npm install --omit=dev`。
 
-要求：OpenClaw ≥ 2026.3.23，Node.js 22+。
+要求：OpenClaw ≥ 2026.10.8，Node.js ≥ 24.22.1（OpenClaw 2026.10.x 的运行时要求）。
 
 ## 配置
 
@@ -177,6 +177,19 @@ agent 发出的图片/语音/文件，路径必须落在受控目录内，否则
 ### 控制命令硬执行
 
 `/silent` `/active` `/role` `/mode` 在消息到达模型之前就被插件拦截处理。群友发这些命令会被静默丢弃，agent 永远看不到、也无法回应或模仿。
+
+### QQ 空间 / 签名工具的安全边界
+
+本插件通过 SnowLuma 的 OneBot 扩展 action 提供 QQ 空间与个人签名能力（`agentTools`），安全设计：
+
+| 层 | 规则 |
+| --- | --- |
+| 写操作开关 | `qzoneWrite: true` 才注册写工具（发说说/删/点赞/评论/改签名/改状态）。默认 `false`——不开时 agent 根本看不到这些工具。与 `outboundAllow` 解耦（发说说没有收件人，peer 白名单语义不适用） |
+| 图片只收本地文件 | `images` 只接受 `file://` 或绝对路径，经 `assertSafeMediaPath`（词法 + realpath 双检，与消息通道同一套媒体根白名单）。http(s)/base64 一律拒绝——防止 agent 被诱导抓取内网/云元数据地址并外传到空间图床（SSRF 外传） |
+| 正文审计 | 发说说 / 评论 / 改签名（`personal_note`、`nickname`）在 `replyAudit` 开启时过 `auditReply`，与私聊消息同一规则（拦本地路径/凭据）。空间是公开的，比私聊更该拦 |
+| 只读工具 | 看空间 / 看动态 / 看详情始终注册（不设白名单），但经过 account 有效性检查 |
+
+`doctorContract: { "stateMigrations": false }` 声明插件无状态迁移需求——避免 OpenClaw 升级时误判"数据未迁移完成"而阻塞插件升级。
 
 ## 开发
 

@@ -237,3 +237,45 @@ SnowLuma 后端原生暴露一组 OneBot **扩展 action**（非 OneBot v11 标�
 | S-04 | 中 | `qq_profile_set` 的 personal_note（签名）没过审计——N-03 同类遗漏，签名也是公开展示文本 | profile_set 在 replyAudit 开启时审计 personal_note + nickname |
 
 **测试**：`test/qzone-tools.test.ts` 增至 **17 用例**（新增：默认审计拦截、replyAudit:false 跳过、签名审计拦截）。全量 **21 files / 235 passed**。
+
+---
+
+## 十一、doctorContract 声明（消除升级 pending 警告）
+
+（2026-10-30，OpenClaw 升级到 2026.10.9 后）
+
+### 问题
+
+每次 OpenClaw 升级或 `doctor --fix`，都出现：
+
+```
+Plugin "openclaw-qq-bridge" data/settings upgrade is unfinished:
+The installed plugin has not confirmed that its saved data and settings are ready for this version.
+```
+
+### 根因
+
+宿主对插件迁移的判定（`plugin-migration-availability`）：
+
+- 有 `doctorContract.stateMigrations` 声明（true/非空数组）→ 需要迁移
+- **channel 插件 + 外部安装 + 有配置数据，且无 `doctorContract` 声明** → 需要检查（inspection）→ pending
+- 其余（含无 `doctorContract` 的非 channel 插件）→ 无状态（stateless）→ 自动 completed
+
+qq-bridge 是 channel 插件（有 `channelConfigs.onebot`），且此前 manifest 没有 `doctorContract`，所以每次升级都被判定为"需要检查"，但插件又没有迁移逻辑来确认"ready"——于是永远 pending。
+
+### 修复
+
+`openclaw.plugin.json` 显式声明：
+
+```json
+"doctorContract": { "stateMigrations": false }
+```
+
+告诉宿主"本插件无状态迁移需求"。效果：
+- 升级 / `doctor --fix` 时判定为 stateless，不再进入 pending
+- 消除"插件 config repair 无法检查"导致的插件升级阻塞
+- 不再污染 OpenClaw 升级日志（此前 20 个 warnings 里的主要来源）
+
+### 影响
+
+仅影响宿主对插件迁移状态的判定；不影响插件功能、配置或数据。duckduckgo / weixin 无需此声明（它们被识别为 stateless 或无 channel 数据）。

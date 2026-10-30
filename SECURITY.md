@@ -49,6 +49,10 @@
 | 暂存文件 | `outbound.ts` | `openclaw/<kind>/`，0600，24h TTL 清理 |
 | 状态文件 | `slang-learner.ts` | 原子写（temp + rename）、损坏隔离、条数上限 |
 | 启动自检 | `config.ts` `validateOneBotConfig()` | 宽松默认值会写进日志，不再静默 |
+| qzone 写操作开关 | `qzone-tools.ts` `qzoneWrite` | 未显式开启时写工具不注册，agent 看不到调不了 |
+| qzone 图片本地限定 | `qzone-tools.ts` `normalizeImageRef()` | 只收 `file://`/绝对路径，过 `assertSafeMediaPath`；http/base64 拒绝（防 SSRF 外传） |
+| qzone 正文审计 | `qzone-tools.ts` send/comment/profile | `replyAudit` 开启时过 `auditReply`，与消息通道同规则 |
+| 迁移契约声明 | `openclaw.plugin.json` `doctorContract` | 显式声明无状态迁移，避免宿主误判 pending 阻塞升级 |
 
 ---
 
