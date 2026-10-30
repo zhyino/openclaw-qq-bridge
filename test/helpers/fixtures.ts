@@ -24,6 +24,7 @@ export function makeAccount(
     replyAudit: true,
     qzoneWrite: false,
     muteSystemNotices: true,
+    ignoreBots: true,
     config: {},
     ...overrides,
   };

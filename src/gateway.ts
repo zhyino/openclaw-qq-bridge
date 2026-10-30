@@ -14,7 +14,7 @@ import type {
 } from "./types.js";
 import { getOneBotRuntime } from "./runtime.js";
 import { reactToMessage, sendText as sendOutboundText } from "./outbound.js";
-import { checkInboundAllowed, isCommandSenderAuthorized, isControlCommand } from "./policy.js";
+import { checkInboundAllowed, isCommandSenderAuthorized, isControlCommand, isIgnoredSender } from "./policy.js";
 import { handleControlCommand } from "./owner-control.js";
 import { MessageBatcher, type BufferedMessage } from "./gateway/batch.js";
 import { extractImages, extractRecordSegments, extractText } from "./gateway/inbound.js";
@@ -117,13 +117,51 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     }, delay);
   };
 
+  // Per-gateway cache of `group_id:user_id -> is_robot`. One HTTP lookup per
+  // member; never re-queries the same member on every message.
+  const robotCache = new Map<string, boolean>();
+
+  /**
+   * Group-membership bot check via SnowLuma's `get_group_member_info`
+   * (`is_robot` field — reliable for real bots; NTQQ-logged accounts report
+   * false, so a false result may still be a bot, but a true result is always
+   * a bot). Failures are NOT treated as bot (don't drop a human's message).
+   */
+  const isRobotMember = async (groupId: string | number, senderId: string): Promise<boolean> => {
+    const key = `${groupId}:${senderId}`;
+    const cached = robotCache.get(key);
+    if (cached !== undefined) return cached;
+
+    try {
+      const url = `${account.httpUrl}/get_group_member_info`;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (account.accessToken) headers.Authorization = `Bearer ${account.accessToken}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ group_id: Number(groupId), user_id: Number(senderId) }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return false;
+      const body = (await response.json()) as {
+        data?: { is_robot?: boolean };
+      };
+      const robot = body.data?.is_robot === true;
+      robotCache.set(key, robot);
+      return robot;
+    } catch {
+      // Network/parse failure: do not drop the message on a flaky lookup.
+      return false;
+    }
+  };
+
   /**
    * Ingest one message: filter, intercept control commands, then buffer.
    * Control commands are handled here (before coalescing) so that
    * "hello\n/silent" can never bury the command inside a batch and leak it to
    * the model as ordinary text.
    */
-  const ingest = (event: OneBotMessageEvent) => {
+  const ingest = async (event: OneBotMessageEvent) => {
     const isGroup = event.message_type === "group";
     const senderId = String(event.user_id);
     const senderName = event.sender.card || event.sender.nickname || senderId;
@@ -136,6 +174,17 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     }
 
     if (event.user_id === event.self_id) return;
+
+    // Bot-loop guard: manual ignore list first (fast, no network), then the
+    // automatic is_robot check for group members.
+    if (isIgnoredSender(account, senderId)) {
+      log?.info(`${tag} ignoring message from ignored sender ${senderId} (ignoreFrom)`);
+      return;
+    }
+    if (isGroup && account.ignoreBots && (await isRobotMember(event.group_id!, senderId))) {
+      log?.info(`${tag} ignoring message from bot member ${senderId} (is_robot)`);
+      return;
+    }
 
     const text = extractText(event.message, { selfId: event.self_id }) || event.raw_message;
     const trimmedText = text.trim();
@@ -245,7 +294,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
           switch (event.post_type) {
             case "message":
-              ingest(event as OneBotMessageEvent);
+              void ingest(event as OneBotMessageEvent);
               break;
             case "meta_event":
               if (event.meta_event_type === "lifecycle" && event.sub_type === "connect") {

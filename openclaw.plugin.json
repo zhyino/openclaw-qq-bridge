@@ -166,6 +166,16 @@
             "type": "boolean",
             "default": true,
             "description": "Mute system notices ([OpenClaw] ... / 💾 Learned: ...) from reaching the chat. Default true."
+          },
+          "ignoreFrom": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "QQ ids whose messages are ignored entirely (bot-loop guard, manual list)."
+          },
+          "ignoreBots": {
+            "type": "boolean",
+            "default": true,
+            "description": "Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true."
           }
         },
         "additionalProperties": false,
@@ -385,6 +395,16 @@
                 "type": "boolean",
                 "default": true,
                 "description": "Mute system notices ([OpenClaw] ... / 💾 Learned: ...) from reaching the chat. Default true."
+              },
+              "ignoreFrom": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "QQ ids whose messages are ignored entirely (bot-loop guard, manual list)."
+              },
+              "ignoreBots": {
+                "type": "boolean",
+                "default": true,
+                "description": "Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true."
               }
             },
             "additionalProperties": false

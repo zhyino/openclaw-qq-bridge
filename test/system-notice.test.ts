@@ -32,6 +32,12 @@ describe('isSystemNotice', () => {
     expect(isSystemNotice('Foo. Say "undo" to revert this skill change.')).toBe(true);
   });
 
+  it('matches empty/failed turn notifications from the host', () => {
+    expect(isSystemNotice('⚠️ Agent couldn\'t generate a response. Please try again.')).toBe(true);
+    expect(isSystemNotice('⚠️ Agent could not generate a response. The tool run finished, but no final summary was produced.')).toBe(true);
+    expect(isSystemNotice('Agent couldn\'t generate a response. Note: some tool actions may have already been executed — please verify before retrying.')).toBe(true);
+  });
+
   it('does not match ordinary chat text', () => {
     expect(isSystemNotice('你好，今天天气不错')).toBe(false);
     // 用户文本以 [OpenClaw] 开头也会被拦——这是静默丢弃语义的一部分

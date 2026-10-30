@@ -34,6 +34,10 @@ export interface OneBotAccountConfig {
   qzoneWrite?: boolean;
   /** Mute system notices (`[OpenClaw] ...`, `💾 Learned: ...`) from reaching the chat. Default true */
   muteSystemNotices?: boolean;
+  /** QQ ids whose messages are ignored entirely (bot-loop guard, manual list). */
+  ignoreFrom?: string[];
+  /** Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true */
+  ignoreBots?: boolean;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -60,6 +64,10 @@ export interface ResolvedOneBotAccount {
   qzoneWrite: boolean;
   /** Mute system notices from reaching the chat (default true) */
   muteSystemNotices: boolean;
+  /** QQ ids whose messages are ignored entirely (bot-loop guard, manual list). */
+  ignoreFrom?: string[];
+  /** Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true */
+  ignoreBots: boolean;
   config: OneBotAccountConfig;
 }
 

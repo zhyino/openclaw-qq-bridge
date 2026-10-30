@@ -42,6 +42,7 @@ function makeAccount(overrides: Partial<ResolvedOneBotAccount> = {}): ResolvedOn
     replyAudit: true,
     qzoneWrite: false,
     muteSystemNotices: true,
+    ignoreBots: true,
     config: {},
     ...overrides,
   };

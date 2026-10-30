@@ -40,6 +40,8 @@ function matchesAny(patterns: string[] | undefined, key: string, type: TargetTyp
  *  - `[OpenClaw] ...` — plugin's own error/processing notices
  *  - `💾 Learned: ...` — host skill-learning notifications (with the fixed
  *    "Say \"undo\" to revert" trailer)
+ *  - `⚠️ Agent couldn't generate a response ...` — host empty/failed turn
+ *    notifications (OpenClaw itself filters these from transcripts)
  */
 export function isSystemNotice(text: string): boolean {
   const t = text.trim();
@@ -47,6 +49,8 @@ export function isSystemNotice(text: string): boolean {
   if (t.startsWith("[OpenClaw]")) return true;
   if (t.startsWith("💾 Learned:") || t.startsWith("💾 Learned ")) return true;
   if (t.includes("Say \"undo\" to revert this skill change")) return true;
+  if (/^⚠️?\s*Agent couldn'?t generate a response/i.test(t)) return true;
+  if (t.includes("couldn't generate a response") || t.includes("could not generate a response")) return true;
   return false;
 }
 
@@ -209,6 +213,16 @@ export function isCommandSenderAuthorized(
     const normalized = pattern.startsWith("private:") ? pattern.slice("private:".length) : pattern;
     return normalized === senderId;
   });
+}
+
+/**
+ * Whether a sender is on the manual ignore list (`ignoreFrom`). This is the
+ * bot-loop guard: messages from these QQ ids are dropped before anything else.
+ */
+export function isIgnoredSender(account: ResolvedOneBotAccount, senderId: string): boolean {
+  const list = account.ignoreFrom;
+  if (!Array.isArray(list) || list.length === 0) return false;
+  return list.some((id) => String(id).trim() === String(senderId));
 }
 
 // ── Unified outbound gate ────────────────────────────────────────────────────

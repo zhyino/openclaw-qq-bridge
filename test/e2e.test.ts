@@ -81,7 +81,15 @@ describe('e2e', () => {
   });
 
   it('group message -> outbound HTTP send_group_msg', async () => {
-    const httpServer = await startMockOneBotHttpServer();
+    const httpServer = await startMockOneBotHttpServer({
+      handler: (req, bodyJson) => {
+        // Bot-loop guard probes get_group_member_info first; answer as a human.
+        if (req.url === '/get_group_member_info') {
+          return { status: 'ok', retcode: 0, data: { is_robot: false } };
+        }
+        return undefined;
+      },
+    });
     const wsServer = await startMockOneBotWsServer();
 
     const { startGateway } = await import('../src/gateway.js');
@@ -123,11 +131,10 @@ describe('e2e', () => {
     });
 
     await vi.waitFor(() => {
-      expect(httpServer.requests.length).toBeGreaterThan(0);
+      expect(httpServer.requests.some((r) => r.url === '/send_group_msg')).toBe(true);
     }, { timeout: 5000 });
 
-    const req = httpServer.requests[0];
-    expect(req.url).toBe('/send_group_msg');
+    const req = httpServer.requests.find((r) => r.url === '/send_group_msg')!;
     expect(req.bodyJson.group_id).toBe(4002);
 
     ac.abort();

@@ -121,6 +121,8 @@ export function resolveOneBotAccount(
     mediaAllowDirs: accountConfig.mediaAllowDirs,
     qzoneWrite: accountConfig.qzoneWrite === true,
     muteSystemNotices: accountConfig.muteSystemNotices !== false,
+    ignoreFrom: accountConfig.ignoreFrom,
+    ignoreBots: accountConfig.ignoreBots !== false,
     config: accountConfig,
   };
 }
