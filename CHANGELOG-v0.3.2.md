@@ -200,3 +200,25 @@ SnowLuma 后端原生暴露一组 OneBot **扩展 action**（非 OneBot v11 标�
 | V-13 parameters as never | 成立（中低） | 消除 `as never`，execute 参数用 typebox `Static` 推导 |
 
 **新增配置**：`channels.onebot.qzoneWrite`（boolean，默认 false）—— 顶层与 `accounts.*` 均可配置，已同步 manifest schema（守卫自动校验）。
+
+---
+
+## 九、二轮复审修复（CODE-REVIEW-v0.3.2-rev2 → 0.3.3）
+
+（2026-10-30，版本升至 **0.3.3**）
+
+| 条目 | 级别 | 修复 |
+| --- | --- | --- |
+| N-01 `file://` Windows 全废 | 高 | `normalizeImageRef` 改用 `fileUriToPath()`（paths.ts 已有，处理盘符/百分号编码），不再手搓 `slice("file://".length)` |
+| N-02 http/base64 直传=SSRF 外传 | 高 | http(s)/base64 一律拒绝，与消息通道对齐（channel.ts 同样拒 http 图片） |
+| N-03 QZone 正文不过审计 | 高 | `qq_qzone_send` / `qq_qzone_comment` 的 content 调用前跑 `auditReply`（与私聊消息同规则，拦本地路径/凭据） |
+| N-04 qzoneWrite 默认 false 静默消失 | 中 | README 配置表新增 `qzoneWrite` 行 + 显式说明部署需配置 `"qzoneWrite": true` |
+| N-05 容器路径 | 中 | 暂不修（非容器部署无影响；SnowLuma 若容器化需用 `containerSharedDir` 转换，记录为已知限制） |
+| N-06 版本号未升 | 中 | **升 0.3.3**：package.json / openclaw.plugin.json / package-lock.json 三处一致 |
+| N-07 V-13 假修 | 中 | 撤销恒假分支，改回 `def.parameters as never`（诚实标注，不假装推导） |
+| N-08 write 死参数 | 低 | `makeTool` 读取 `def.write` 并追加"（写操作）"标注到 description |
+| N-09 SECURITY_FIELDS 缺 qzoneWrite | 低 | `check-manifest-fields.mjs` 的 SECURITY_FIELDS 加入 `qzoneWrite` |
+| N-10 发布时 dist+src 并存 | 低 | `extensions` 改回 `./dist/index.js`（与 runtimeExtensions 一致，消除加载歧义） |
+| N-11 数字不一致 | 低 | 测试计数核实为 232 passed（含新增 N-01 正向用例） |
+
+**测试**：`test/qzone-tools.test.ts` 增至 **14 用例**（新增 http 拒绝 N-02、file:// 真实文件接受 N-01 正向用例）。全量 **21 files / 232 passed**。

@@ -41,6 +41,7 @@ export const SECURITY_FIELDS = [
   "outboundDeny",
   "replyAudit",
   "mediaAllowDirs",
+  "qzoneWrite",
 ];
 
 /**

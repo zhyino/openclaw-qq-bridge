@@ -1,7 +1,7 @@
 {
   "name": "openclaw-qq-bridge",
   "displayName": "OpenClaw QQ Bridge",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "OpenClaw OneBot 11 channel plugin for QQ (SnowLuma/NapCat). Hardened: unified outbound gate, media path whitelist, execFile voice pipeline, CQ escaping, owner commands, slang learning.",
   "type": "module",
   "main": "dist/index.js",
@@ -26,7 +26,7 @@
   "license": "MIT",
   "clawdbot": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
     "runtimeExtensions": [
       "./dist/index.js"
@@ -34,7 +34,7 @@
   },
   "moltbot": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
     "runtimeExtensions": [
       "./dist/index.js"
@@ -42,7 +42,7 @@
   },
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
     "setupEntry": "./dist/setup-entry.js",
     "runtimeExtensions": [

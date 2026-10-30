@@ -9,6 +9,7 @@ function mkAccount(overrides?: Partial<ResolvedOneBotAccount>): ResolvedOneBotAc
     wsUrl: "ws://127.0.0.1:1",
     httpUrl: "http://127.0.0.1:8080",
     qzoneWrite: true,
+    mediaAllowDirs: [],
     config: {},
     ...overrides,
   } as ResolvedOneBotAccount;
@@ -113,16 +114,15 @@ describe("qzone-tools", () => {
     expect(res.details?.action).toBe("send_qzone_msg");
   });
 
-  it("qq_qzone_send: passes http images and custom ugc_right", async () => {
+  it("qq_qzone_send: rejects http images (N-02 SSRF guard)", async () => {
     mockOk({ tid: "t2", time: 1700000001 });
-    await runTool("qq_qzone_send", {
+    const res = await runTool("qq_qzone_send", {
       content: "带图",
       images: ["https://example.com/a.png"],
       ugc_right: 64,
     });
-    const { body } = lastCall();
-    expect(body.images).toEqual(["https://example.com/a.png"]);
-    expect(body.ugc_right).toBe(64);
+    expect(res.details?.ok).toBe(false);
+    expect(String(res.content?.[0]?.text ?? "")).toContain("local files only");
   });
 
   it("qq_qzone_feeds: fetches friend feeds with cursor", async () => {
@@ -191,5 +191,37 @@ describe("qzone-tools", () => {
     });
     expect(res.details?.ok).toBe(false);
     expect(String(res.content?.[0]?.text ?? "")).toContain("media path not allowed");
+  });
+
+  it("accepts a real file inside media roots via file:// URI (N-01)", async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { pathToFileURL } = await import("node:url");
+
+    const dir = mkdtempSync(join(tmpdir(), "qzone-media-"));
+    const file = join(dir, "a.png");
+    writeFileSync(file, "png-bytes");
+    try {
+      mockOk({ tid: "t4", time: 1 });
+      // runTool 用默认 account；这里需要把 tmp 目录加进 mediaAllowDirs。
+      // 直接调用 buildQzoneAndProfileTools 并传覆盖后的 account。
+      const tools = buildQzoneAndProfileTools(
+        mkAccount({ qzoneWrite: true, mediaAllowDirs: [dir] }),
+      );
+      const tool = tools.find((t) => t.name === "qq_qzone_send")!;
+      const res = (await tool.execute("call-1", {
+        content: "带图",
+        images: [pathToFileURL(file).toString()],
+      } as never)) as {
+        content?: Array<{ type?: string; text?: string }>;
+        details?: { ok?: boolean };
+      };
+      expect(res.details?.ok).toBe(true);
+      const { body } = lastCall();
+      expect(body.images[0]).toContain("a.png");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

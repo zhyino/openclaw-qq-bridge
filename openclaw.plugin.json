@@ -2,7 +2,7 @@
   "id": "openclaw-qq-bridge",
   "name": "QQ Bridge",
   "description": "QQ via OneBot 11 with hardened outbound whitelist + owner commands + slang learning",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "channels": [
     "onebot"
   ],

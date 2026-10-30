@@ -24,7 +24,8 @@
 import { Type, type Static } from "typebox";
 import type { AnyAgentTool } from "openclaw/plugin-sdk/core";
 import type { ResolvedOneBotAccount } from "./types.js";
-import { assertSafeMediaPath } from "./policy.js";
+import { assertSafeMediaPath, auditReply } from "./policy.js";
+import { fileUriToPath } from "./paths.js";
 
 const API_TIMEOUT_MS = 15_000;
 
@@ -79,17 +80,25 @@ async function callSnowLumaAction(
 }
 
 /**
- * 校验一条图片引用。本地路径（file:// 或绝对路径）走媒体根白名单；
- * http(s) / base64 属于远程/内联数据，不做本地路径检查（与消息通道一致：
- * 只有真正读取本地文件时才需要路径守卫）。
+ * 校验一条图片引用。
+ *
+ *  - 本地路径（file:// 或绝对路径）：走媒体根白名单（词法 + realpath 双检）。
+ *  - http(s) / base64：拒绝。与消息通道一致（channel.ts 对 http 图片抛
+ *    "OneBot sendMedia currently supports local file paths only"）——否则
+ *    SnowLuma 会去抓取内网/云元数据地址并把结果外传到空间图床，构成
+ *    SSRF 外传通道。
  */
 function normalizeImageRef(account: ResolvedOneBotAccount, img: string): string {
   const trimmed = String(img).trim();
   if (!trimmed) return trimmed;
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  if (trimmed.startsWith("base64://")) return trimmed;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    throw new Error("qzone images support local files only (http(s) URLs are rejected)");
+  }
+  if (trimmed.startsWith("base64://")) {
+    throw new Error("qzone images support local files only (base64:// is rejected)");
+  }
   if (trimmed.startsWith("file://")) {
-    return assertSafeMediaPath(account, trimmed.slice("file://".length));
+    return assertSafeMediaPath(account, fileUriToPath(trimmed));
   }
   // 绝对路径或相对路径：视为本地文件，走白名单
   return assertSafeMediaPath(account, trimmed);
@@ -107,13 +116,12 @@ function makeTool(
     execute: (params: Record<string, unknown>) => Promise<unknown>;
   },
 ): AnyAgentTool {
+  const writeMark = def.write === true ? "（写操作）" : "";
   return {
     name: def.name,
     label: def.label,
-    description: def.description,
-    parameters: def.parameters as Parameters<AnyAgentTool["execute"]> extends never
-      ? never
-      : typeof def.parameters,
+    description: `${def.description}${writeMark}`,
+    parameters: def.parameters as never,
     execute: async (toolCallId: string, params: Static<typeof def.parameters>) => {
       try {
         const data = await def.execute(params as Record<string, unknown>);
@@ -243,15 +251,21 @@ export function buildQzoneAndProfileTools(
           ),
         }),
         write: true,
-        execute: (p) =>
-          callSnowLumaAction(account, "send_qzone_msg", {
+        execute: (p) => {
+          // N-03: 发说说内容与私聊消息同审计（拦本地路径/凭据，公开空间更该拦）
+          const audit = auditReply(String(p.content ?? ""));
+          if (!audit.ok) {
+            throw new Error(`qzone send blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+          }
+          return callSnowLumaAction(account, "send_qzone_msg", {
             content: p.content,
             images: Array.isArray(p.images)
               ? p.images.map((img: string) => normalizeImageRef(account, img))
               : undefined,
             ugc_right: p.ugc_right ?? 1,
             target_uins: p.target_uins,
-          }),
+          });
+        },
       }),
 
       makeTool(account, {
@@ -323,15 +337,21 @@ export function buildQzoneAndProfileTools(
           ),
         }),
         write: true,
-        execute: (p) =>
-          callSnowLumaAction(account, "comment_qzone", {
+        execute: (p) => {
+          // N-03: 评论内容同样过审计
+          const audit = auditReply(String(p.content ?? ""));
+          if (!audit.ok) {
+            throw new Error(`qzone comment blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+          }
+          return callSnowLumaAction(account, "comment_qzone", {
             tid: p.tid,
             content: p.content,
             target_uin: p.target_uin,
             images: Array.isArray(p.images)
               ? p.images.map((img: string) => normalizeImageRef(account, img))
               : undefined,
-          }),
+          });
+        },
       }),
 
       makeTool(account, {

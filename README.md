@@ -87,6 +87,7 @@ openclaw gateway restart
 | `sharedDir` | 与 NapCat 容器共享的宿主目录（媒体中转站） | `~/napcat/shared` |
 | `containerSharedDir` | `sharedDir` 在容器内的路径 | `/shared` |
 | `mediaAllowDirs` | 额外允许发送的媒体目录（除 `sharedDir` 之外） | `[]` |
+| `qzoneWrite` | 是否启用 QQ 空间/资料**写**工具（发说说/点赞/评论/改签名） | `false` |
 | `groupAutoReact` | 群消息自动加 reaction | `false` |
 | `groupAutoReactEmojiId` | 自动 reaction 使用的表情 id | `1` |
 
