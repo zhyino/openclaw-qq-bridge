@@ -78,9 +78,12 @@ const CONTROL_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
 
 // Outbound anti-flood: `to -> last admitted send timestamp`. When enabled
-// (outboundMinIntervalSec), a reply to the same target is admitted at most
-// once per interval, so two bots cannot loop into a flood. Explicit replies
+// (outboundRateLimit), a reply to the same target is admitted at most once
+// per interval, so two bots cannot loop into a flood. Explicit replies
 // (replyToId present — e.g. answering an @) are exempt.
+//
+// Entries older than the configured interval are pruned on write so the map
+// does not grow without bound over a long-lived gateway.
 const outboundLastSent = new Map<string, number>();
 
 function isOutboundRateLimited(
@@ -88,12 +91,20 @@ function isOutboundRateLimited(
   to: string,
   replyToId?: string | null,
 ): boolean {
-  if (!account.outboundRateLimit) return false;
+  const intervalSec = account.outboundRateLimit;
+  if (!intervalSec) return false;
   if (replyToId != null && String(replyToId).trim() !== "") return false; // explicit reply exempt
   const now = Date.now();
   const last = outboundLastSent.get(to) ?? 0;
-  if (now - last < account.outboundRateLimit * 1000) return true;
+  if (now - last < intervalSec * 1000) return true;
   outboundLastSent.set(to, now);
+  // Opportunistic prune: drop entries older than the interval so the map stays
+  // bounded by the number of targets that were active within the window.
+  if (outboundLastSent.size > 128) {
+    for (const [key, ts] of outboundLastSent) {
+      if (now - ts >= intervalSec * 1000) outboundLastSent.delete(key);
+    }
+  }
   return false;
 }
 

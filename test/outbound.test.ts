@@ -395,4 +395,30 @@ describe('outbound rate limit (outboundRateLimit)', () => {
     expect(second.error).toBeUndefined();
     expect((globalThis.fetch as any).mock.calls).toHaveLength(2);
   });
+
+  it('recovers after the interval elapses (stale entries are not permanent)', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 11 } }),
+    });
+
+    const account = mkAccount({ outboundRateLimit: 1 }); // 1s window
+    const to = `private:${950000 + Math.floor(Math.random() * 100000)}`;
+
+    await sendText({ to, text: 'first', account });
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
+
+    // Within the 1s window: rate-limited.
+    const limited = await sendText({ to, text: 'limited', account });
+    expect(limited.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
+
+    // After the window elapses: admitted again.
+    await new Promise((r) => setTimeout(r, 1100));
+    const again = await sendText({ to, text: 'again', account });
+    expect(again.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(2);
+  });
 });
