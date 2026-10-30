@@ -187,6 +187,30 @@ export function isControlCommand(text: string): boolean {
   return /^\/(silent|active|role|mode)\b/i.test(text.trim());
 }
 
+/**
+ * Whether a sender is allowed to issue OpenClaw/plugin commands at all.
+ * Command rights are personal: the owner, or an individual QQ id listed in
+ * allowFrom (bare id or private:), or an explicit `*`. A `group:xxx` entry
+ * admits messages but never grants command rights — otherwise any group member
+ * could `/reset` / `/new` / `/model` the agent.
+ */
+export function isCommandSenderAuthorized(
+  account: ResolvedOneBotAccount,
+  senderId: string,
+): boolean {
+  if (isOwner(account, senderId)) return true;
+
+  const patterns = account.allowFrom;
+  if (!patterns || patterns.length === 0) return false;
+
+  return patterns.some((pattern) => {
+    if (pattern === "*") return true;
+    if (pattern.startsWith("group:")) return false;
+    const normalized = pattern.startsWith("private:") ? pattern.slice("private:".length) : pattern;
+    return normalized === senderId;
+  });
+}
+
 // ── Unified outbound gate ────────────────────────────────────────────────────
 
 export interface OutboundGateResult {

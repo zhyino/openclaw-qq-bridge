@@ -14,7 +14,7 @@ import type {
 } from "./types.js";
 import { getOneBotRuntime } from "./runtime.js";
 import { reactToMessage, sendText as sendOutboundText } from "./outbound.js";
-import { checkInboundAllowed, isControlCommand } from "./policy.js";
+import { checkInboundAllowed, isCommandSenderAuthorized, isControlCommand } from "./policy.js";
 import { handleControlCommand } from "./owner-control.js";
 import { MessageBatcher, type BufferedMessage } from "./gateway/batch.js";
 import { extractImages, extractRecordSegments, extractText } from "./gateway/inbound.js";
@@ -153,6 +153,15 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         log?.info(`${tag} control command handled (ingest): ${trimmedText.slice(0, 40)}`);
         return;
       }
+    }
+
+    // Any OTHER slash command (OpenClaw built-ins like /reset /new /model /think)
+    // is only forwarded to the agent when the sender has command rights. An
+    // unprivileged group member must never reach the agent with a command —
+    // otherwise anyone in a listed group could reset or reconfigure the agent.
+    if (trimmedText.startsWith("/") && !isCommandSenderAuthorized(account, senderId)) {
+      log?.info(`${tag} dropping command from unprivileged sender ${senderId}: ${trimmedText.slice(0, 40)}`);
+      return;
     }
 
     log?.info(

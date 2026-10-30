@@ -116,7 +116,7 @@ describe('gateway command passthrough', () => {
     await wsServer.close();
   });
 
-  it('does NOT authorize /reset sent by a group member (group entry is not command rights)', async () => {
+  it('drops /reset sent by a group member entirely (never reaches the agent)', async () => {
     const wsServer = await startMockOneBotWsServer();
     const ac = new AbortController();
     const { startGateway } = await import('../src/gateway.js');
@@ -149,13 +149,10 @@ describe('gateway command passthrough', () => {
     // 群友 55555 发 /reset
     wsServer.sendToAll(makeGroupMsg(55555, 806966728, '/reset'));
 
-    await vi.waitFor(() => {
-      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
-    }, { timeout: 5000 });
-
-    // 消息仍进 agent（allowFrom 放行了群），但命令未被授权
-    expect(runtimeState.state.lastFinalizeArgs.CommandBody).toBe('/reset');
-    expect(runtimeState.state.lastFinalizeArgs.CommandAuthorized).toBe(false);
+    // 命令被整体丢弃：不 dispatch，不进 agent
+    await new Promise((r) => setTimeout(r, 1800));
+    expect(runtimeState.state.lastDispatchArgs).toBeNull();
+    expect(runtimeState.state.lastFinalizeArgs).toBeNull();
 
     ac.abort();
     await runP;
@@ -198,6 +195,124 @@ describe('gateway command passthrough', () => {
     }, { timeout: 5000 });
 
     expect(runtimeState.state.lastFinalizeArgs.CommandAuthorized).toBe(true);
+
+    ac.abort();
+    await runP;
+    await wsServer.close();
+  });
+
+  it('does NOT forward ANY slash command from an unprivileged group member (not just /reset)', async () => {
+    const wsServer = await startMockOneBotWsServer();
+    const ac = new AbortController();
+    const { startGateway } = await import('../src/gateway.js');
+
+    let readyResolve!: () => void;
+    const readyP = new Promise<void>((r) => (readyResolve = r));
+
+    const runP = startGateway({
+      account: makeAccount({
+        accountId: 'default',
+        enabled: true,
+        wsUrl: wsServer.wsUrl,
+        httpUrl: 'http://x',
+        allowFrom: ['group:806966728'],
+        groupAutoReact: false,
+        groupAutoReactEmojiId: 1,
+        config: {},
+      }),
+      abortSignal: ac.signal,
+      cfg: {},
+      onReady: () => readyResolve(),
+      log: { info: () => {}, error: () => {}, debug: () => {} },
+    });
+
+    await readyP;
+
+    for (const cmd of ['/new', '/model gpt-5', '/think high', '/help', '/context', '/whoami', '/verbose on']) {
+      runtimeState.state.lastDispatchArgs = null;
+      wsServer.sendToAll(makeGroupMsg(55555, 806966728, cmd));
+      // 给 batcher 一点时间；不该有任何 dispatch
+      await new Promise((r) => setTimeout(r, 1800));
+      expect(runtimeState.state.lastDispatchArgs, `${cmd} must NOT reach the agent`).toBeNull();
+    }
+
+    ac.abort();
+    await runP;
+    await wsServer.close();
+  });
+
+  it('forwards slash commands from an individually authorized sender in a group', async () => {
+    const wsServer = await startMockOneBotWsServer();
+    const ac = new AbortController();
+    const { startGateway } = await import('../src/gateway.js');
+
+    let readyResolve!: () => void;
+    const readyP = new Promise<void>((r) => (readyResolve = r));
+
+    const runP = startGateway({
+      account: makeAccount({
+        accountId: 'default',
+        enabled: true,
+        wsUrl: wsServer.wsUrl,
+        httpUrl: 'http://x',
+        allowFrom: ['10001', 'group:806966728'],
+        groupAutoReact: false,
+        groupAutoReactEmojiId: 1,
+        config: {},
+      }),
+      abortSignal: ac.signal,
+      cfg: {},
+      onReady: () => readyResolve(),
+      log: { info: () => {}, error: () => {}, debug: () => {} },
+    });
+
+    await readyP;
+
+    for (const cmd of ['/reset', '/new', '/model gpt-5']) {
+      runtimeState.state.lastDispatchArgs = null;
+      wsServer.sendToAll(makeGroupMsg(10001, 806966728, cmd));
+      await vi.waitFor(() => {
+        expect(runtimeState.state.lastDispatchArgs, `${cmd} must reach the agent`).not.toBeNull();
+      }, { timeout: 5000 });
+    }
+
+    ac.abort();
+    await runP;
+    await wsServer.close();
+  });
+
+  it('does NOT forward slash commands from an unprivileged PRIVATE sender', async () => {
+    const wsServer = await startMockOneBotWsServer();
+    const ac = new AbortController();
+    const { startGateway } = await import('../src/gateway.js');
+
+    let readyResolve!: () => void;
+    const readyP = new Promise<void>((r) => (readyResolve = r));
+
+    const runP = startGateway({
+      account: makeAccount({
+        accountId: 'default',
+        enabled: true,
+        wsUrl: wsServer.wsUrl,
+        httpUrl: 'http://x',
+        // 群放行，但私聊只放行 10001
+        allowFrom: ['private:10001', 'group:806966728'],
+        groupAutoReact: false,
+        groupAutoReactEmojiId: 1,
+        config: {},
+      }),
+      abortSignal: ac.signal,
+      cfg: {},
+      onReady: () => readyResolve(),
+      log: { info: () => {}, error: () => {}, debug: () => {} },
+    });
+
+    await readyP;
+
+    runtimeState.state.lastDispatchArgs = null;
+    wsServer.sendToAll(makePrivateMsg(99999, '/reset'));
+    await new Promise((r) => setTimeout(r, 1800));
+    expect(runtimeState.state.lastDispatchArgs).toBeNull();
 
     ac.abort();
     await runP;
