@@ -132,4 +132,29 @@ describe('buildMessage — outbound QQ face emoji', () => {
       { type: 'text', data: { text: '正常文本 [CQ：face,id=1] 也正常' } },
     ]);
   });
+
+  it('prepends a reply segment when replyToId is provided', () => {
+    expect(buildMessage('收到', '12345')).toEqual([
+      { type: 'reply', data: { id: '12345' } },
+      { type: 'text', data: { text: '收到' } },
+    ]);
+  });
+
+  it('prepends reply segment before faces', () => {
+    expect(buildMessage('哈哈[CQ:face,id=1]', '99')).toEqual([
+      { type: 'reply', data: { id: '99' } },
+      { type: 'text', data: { text: '哈哈' } },
+      { type: 'face', data: { id: '1' } },
+    ]);
+  });
+
+  it('emits only the reply segment when text is empty', () => {
+    expect(buildMessage('', '42')).toEqual([{ type: 'reply', data: { id: '42' } }]);
+  });
+
+  it('ignores empty/null replyToId', () => {
+    expect(buildMessage('hi', '')).toEqual([{ type: 'text', data: { text: 'hi' } }]);
+    expect(buildMessage('hi', null)).toEqual([{ type: 'text', data: { text: 'hi' } }]);
+    expect(buildMessage('hi', undefined)).toEqual([{ type: 'text', data: { text: 'hi' } }]);
+  });
 });

@@ -248,9 +248,15 @@ function escapeCqText(text: string): string {
  * can send QQ native emoji); every OTHER `[CQ:...]` is still neutralised by
  * escapeCqText — an agent echoing `[CQ:image,file=http://attacker/x.png]` must
  * never emit real rich media. face is safe to whitelist: it carries only an id.
+ *
+ * When `replyToId` is provided, a OneBot `reply` segment is prepended so the
+ * message shows as a quote-reply to that message id.
  */
-export function buildMessage(text: string): OneBotMessageSegment[] {
+export function buildMessage(text: string, replyToId?: string | null): OneBotMessageSegment[] {
   const segments: OneBotMessageSegment[] = [];
+  if (replyToId != null && String(replyToId).trim() !== "") {
+    segments.push({ type: "reply", data: { id: String(replyToId).trim() } });
+  }
   if (!text.trim()) return segments;
 
   const FACE_RE = /\[CQ:face,\s*id=(\d+)\]/gi;
@@ -281,14 +287,14 @@ export function buildMessage(text: string): OneBotMessageSegment[] {
 // ── Public senders ───────────────────────────────────────────────────────────
 
 export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
-  const { to, text, account } = ctx;
+  const { to, text, account, replyToId } = ctx;
 
   if (!account.httpUrl) {
     return { channel: "onebot", error: "OneBot not configured (missing httpUrl)" };
   }
 
   try {
-    const { result } = await dispatchSend(account, to, buildMessage(text), { auditText: text });
+    const { result } = await dispatchSend(account, to, buildMessage(text, replyToId), { auditText: text });
 
     if (result.retcode !== 0) {
       return {

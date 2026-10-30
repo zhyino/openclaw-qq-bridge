@@ -158,7 +158,12 @@ export function createBatchDispatcher(deps: DispatchDeps) {
         dispatcherOptions: {
           responsePrefix: messagesConfig.responsePrefix,
           deliver: async (
-            payload: { text?: string; mediaUrls?: string[]; mediaUrl?: string },
+            payload: {
+              text?: string;
+              mediaUrls?: string[];
+              mediaUrl?: string;
+              replyToId?: string | number | null;
+            },
             info: { kind: string },
           ) => {
             hasResponse = true;
@@ -184,7 +189,13 @@ export function createBatchDispatcher(deps: DispatchDeps) {
             if (!replyText.trim()) return;
 
             try {
-              const sendResult = await sendOutboundText({ to: address, text: replyText, account });
+              const sendResult = await sendOutboundText({
+                to: address,
+                text: replyText,
+                replyToId:
+                  payload.replyToId != null ? String(payload.replyToId) : null,
+                account,
+              });
               if (sendResult?.error) {
                 log?.warn?.(`${tag} send to ${address} blocked/failed: ${sendResult.error}`);
                 return;
