@@ -21,6 +21,7 @@ import { extractImages, extractRecordSegments, extractText } from "./gateway/inb
 import { createBatchDispatcher, type BridgeLog } from "./gateway/dispatch.js";
 
 export {
+  FACE_NAMES,
   extractImages,
   extractRecordSegments,
   extractText,
@@ -136,7 +137,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
     if (event.user_id === event.self_id) return;
 
-    const text = extractText(event.message) || event.raw_message;
+    const text = extractText(event.message, { selfId: event.self_id }) || event.raw_message;
     const trimmedText = text.trim();
 
     if (trimmedText.startsWith("/") && isControlCommand(trimmedText)) {

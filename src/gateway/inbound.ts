@@ -13,11 +13,153 @@ export interface VoiceMedia {
 
 // ── Segment extraction ───────────────────────────────────────────────────────
 
-export function extractText(segments: OneBotMessageSegment[]): string {
-  return segments
-    .filter((seg) => seg.type === "text")
-    .map((seg) => String(seg.data.text ?? ""))
-    .join("");
+/**
+ * QQ native emoji (face segment) id → name. Source: QQ's classic emoji set.
+ * Unknown ids fall back to `[表情:<id>]` so nothing is silently dropped.
+ */
+export const FACE_NAMES: Record<string, string> = {
+  "0": "惊讶",
+  "1": "微笑",
+  "2": "撇嘴",
+  "3": "色",
+  "4": "发呆",
+  "5": "得意",
+  "6": "流泪",
+  "7": "害羞",
+  "8": "闭嘴",
+  "9": "睡",
+  "10": "大哭",
+  "11": "尴尬",
+  "12": "发怒",
+  "13": "调皮",
+  "14": "呲牙",
+  "15": "惊讶",
+  "16": "难过",
+  "17": "酷",
+  "18": "冷汗",
+  "19": "抓狂",
+  "20": "吐",
+  "21": "偷笑",
+  "22": "可爱",
+  "23": "白眼",
+  "24": "傲慢",
+  "25": "饥饿",
+  "26": "困",
+  "27": "惊恐",
+  "28": "流汗",
+  "29": "憨笑",
+  "30": "大兵",
+  "31": "奋斗",
+  "32": "咒骂",
+  "33": "疑问",
+  "34": "嘘",
+  "35": "晕",
+  "36": "折磨",
+  "37": "衰",
+  "38": "骷髅",
+  "39": "敲打",
+  "40": "再见",
+  "41": "擦汗",
+  "42": "抠鼻",
+  "43": "鼓掌",
+  "44": "糗大了",
+  "45": "坏笑",
+  "46": "左哼哼",
+  "47": "右哼哼",
+  "48": "哈欠",
+  "49": "鄙视",
+  "50": "委屈",
+  "51": "快哭了",
+  "52": "阴险",
+  "53": "亲亲",
+  "54": "吓",
+  "55": "可怜",
+  "56": "菜刀",
+  "57": "西瓜",
+  "58": "啤酒",
+  "59": "篮球",
+  "60": "乒乓",
+  "61": "咖啡",
+  "62": "饭",
+  "63": "猪头",
+  "64": "玫瑰",
+  "65": "凋谢",
+  "66": "示爱",
+  "67": "爱心",
+  "68": "心碎",
+  "69": "蛋糕",
+  "70": "闪电",
+  "71": "炸弹",
+  "72": "刀",
+  "73": "足球",
+  "74": "便便",
+  "75": "月亮",
+  "76": "太阳",
+  "77": "礼物",
+  "78": "拥抱",
+  "79": "强",
+  "80": "弱",
+  "81": "握手",
+  "82": "胜利",
+  "83": "抱拳",
+  "84": "勾引",
+  "85": "拳头",
+  "86": "差劲",
+  "87": "爱你",
+  "88": "NO",
+  "89": "OK",
+  "90": "爱情",
+  "91": "飞吻",
+  "92": "跳跳",
+  "93": "发抖",
+  "94": "怄火",
+  "95": "转圈",
+  "96": "磕头",
+  "97": "回头",
+  "98": "跳绳",
+  "99": "挥手",
+  "100": "激动",
+  "101": "街舞",
+  "102": "献吻",
+  "103": "左太极",
+  "104": "右太极",
+};
+
+export interface ExtractTextOptions {
+  /**
+   * The bot's own QQ id. When set, `at` segments are decoded into markers
+   * (`[被@]` / `[被@全体]` / `[@<qq>]`) and `face` segments into `[表情:<name>]`
+   * instead of being silently dropped. Without it, behaviour matches the
+   * original: only text segments are returned.
+   */
+  selfId?: number | string;
+}
+
+export function extractText(segments: OneBotMessageSegment[], options?: ExtractTextOptions): string {
+  const parts: string[] = [];
+  for (const seg of segments) {
+    if (seg.type === "text") {
+      parts.push(String(seg.data.text ?? ""));
+      continue;
+    }
+    if (options?.selfId == null) continue;
+    if (seg.type === "at") {
+      const qq = String(seg.data.qq ?? "");
+      if (qq === "all") {
+        parts.push("[被@全体]");
+      } else if (qq !== "" && qq === String(options.selfId)) {
+        parts.push("[被@]");
+      } else if (qq !== "") {
+        parts.push(`[@${qq}]`);
+      }
+      continue;
+    }
+    if (seg.type === "face") {
+      const id = String(seg.data.id ?? "");
+      parts.push(id ? `[表情:${FACE_NAMES[id] ?? id}]` : "[表情]");
+    }
+  }
+  return parts.join("");
 }
 
 export function extractImages(segments: OneBotMessageSegment[]): string[] {

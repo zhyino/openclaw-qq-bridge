@@ -226,11 +226,38 @@ function escapeCqText(text: string): string {
   return text.replace(/\[CQ:/gi, "[CQ：");
 }
 
-function buildMessage(text: string): OneBotMessageSegment[] {
+/**
+ * `[CQ:face,id=<n>]` is decoded into a real OneBot face segment (so the agent
+ * can send QQ native emoji); every OTHER `[CQ:...]` is still neutralised by
+ * escapeCqText — an agent echoing `[CQ:image,file=http://attacker/x.png]` must
+ * never emit real rich media. face is safe to whitelist: it carries only an id.
+ */
+export function buildMessage(text: string): OneBotMessageSegment[] {
   const segments: OneBotMessageSegment[] = [];
-  if (text.trim()) {
-    segments.push({ type: "text", data: { text: escapeCqText(text) } });
+  if (!text.trim()) return segments;
+
+  const FACE_RE = /\[CQ:face,\s*id=(\d+)\]/gi;
+  let lastIndex = 0;
+  let pendingText = "";
+  let match: RegExpExecArray | null;
+
+  const flushText = () => {
+    if (pendingText.trim()) {
+      segments.push({ type: "text", data: { text: escapeCqText(pendingText) } });
+      pendingText = "";
+    }
+  };
+
+  FACE_RE.lastIndex = 0;
+  while ((match = FACE_RE.exec(text)) !== null) {
+    pendingText += text.slice(lastIndex, match.index);
+    flushText();
+    segments.push({ type: "face", data: { id: match[1] } });
+    lastIndex = FACE_RE.lastIndex;
   }
+  pendingText += text.slice(lastIndex);
+  flushText();
+
   return segments;
 }
 
