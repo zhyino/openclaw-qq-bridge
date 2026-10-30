@@ -28,6 +28,28 @@ function matchesAny(patterns: string[] | undefined, key: string, type: TargetTyp
   return matchesAnyTarget(patterns, key, type);
 }
 
+// ── System notice suppression ────────────────────────────────────────────────
+
+/**
+ * System notices the agent/host injects into chat and the operator usually
+ * does not want to see (they are also a prompt-injection echo surface when
+ * replayed verbatim). Muted at the single outbound choke point when
+ * `muteSystemNotices` is enabled (default).
+ *
+ * Matches:
+ *  - `[OpenClaw] ...` — plugin's own error/processing notices
+ *  - `💾 Learned: ...` — host skill-learning notifications (with the fixed
+ *    "Say \"undo\" to revert" trailer)
+ */
+export function isSystemNotice(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (t.startsWith("[OpenClaw]")) return true;
+  if (t.startsWith("💾 Learned:") || t.startsWith("💾 Learned ")) return true;
+  if (t.includes("Say \"undo\" to revert this skill change")) return true;
+  return false;
+}
+
 // ── Inbound ──────────────────────────────────────────────────────────────────
 
 export interface InboundDecision {

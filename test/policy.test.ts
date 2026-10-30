@@ -41,6 +41,7 @@ function makeAccount(overrides: Partial<ResolvedOneBotAccount> = {}): ResolvedOn
     groupAutoReactEmojiId: 1,
     replyAudit: true,
     qzoneWrite: false,
+    muteSystemNotices: true,
     config: {},
     ...overrides,
   };

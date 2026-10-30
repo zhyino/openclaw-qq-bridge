@@ -32,6 +32,8 @@ export interface OneBotAccountConfig {
   mediaAllowDirs?: string[];
   /** Enable QQ-zone/profile write tools (send/delete/like/comment/delete/profile/status). Default false */
   qzoneWrite?: boolean;
+  /** Mute system notices (`[OpenClaw] ...`, `💾 Learned: ...`) from reaching the chat. Default true */
+  muteSystemNotices?: boolean;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -56,6 +58,8 @@ export interface ResolvedOneBotAccount {
   sharedDir?: string;
   mediaAllowDirs?: string[];
   qzoneWrite: boolean;
+  /** Mute system notices from reaching the chat (default true) */
+  muteSystemNotices: boolean;
   config: OneBotAccountConfig;
 }
 

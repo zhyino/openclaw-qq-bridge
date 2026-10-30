@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, posix, relative, sep } from "node:path";
 import type { ResolvedOneBotAccount, OneBotApiResponse, OneBotMessageSegment } from "./types.js";
-import { assertOutboundAllowed, assertSafeMediaPath } from "./policy.js";
+import { assertOutboundAllowed, assertSafeMediaPath, isSystemNotice } from "./policy.js";
 import { parseTarget } from "./target.js";
 import {
   STAGED_MEDIA_DIRNAME,
@@ -50,6 +50,17 @@ export type OneBotReactionResult = {
   ok: boolean;
   error?: string;
 };
+
+/**
+ * Thrown when a send is a muted system notice. Callers treat it as a silent
+ * no-op (no error notice, no warn log) — the message is dropped on purpose.
+ */
+export class SystemNoticeMutedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SystemNoticeMutedError";
+  }
+}
 
 const CONTROL_TIMEOUT_MS = 10_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
@@ -103,6 +114,12 @@ async function dispatchSend(
   segments: OneBotMessageSegment[],
   options: { auditText?: string; timeoutMs?: number } = {},
 ): Promise<{ result: OneBotApiResponse; endpoint: string }> {
+  // System notices are muted before the whitelist/audit gates so they never
+  // even reach the OneBot socket when the operator doesn't want them.
+  if (account.muteSystemNotices && options.auditText != null && isSystemNotice(options.auditText)) {
+    throw new SystemNoticeMutedError("system notice muted by muteSystemNotices");
+  }
+
   const gate = assertOutboundAllowed(account, to, options.auditText);
   if (!gate.allowed) {
     throw new Error(`outbound blocked by policy: ${gate.reason ?? "not allowed"}`);
@@ -286,6 +303,10 @@ export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
       messageId: data?.message_id != null ? String(data.message_id) : undefined,
     };
   } catch (err) {
+    // A muted system notice is a deliberate silent drop: no error, no log.
+    if (err instanceof SystemNoticeMutedError) {
+      return { channel: "onebot" };
+    }
     return { channel: "onebot", error: err instanceof Error ? err.message : String(err) };
   }
 }

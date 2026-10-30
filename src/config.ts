@@ -120,6 +120,7 @@ export function resolveOneBotAccount(
     sharedDir: accountConfig.sharedDir,
     mediaAllowDirs: accountConfig.mediaAllowDirs,
     qzoneWrite: accountConfig.qzoneWrite === true,
+    muteSystemNotices: accountConfig.muteSystemNotices !== false,
     config: accountConfig,
   };
 }

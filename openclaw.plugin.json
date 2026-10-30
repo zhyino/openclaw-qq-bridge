@@ -161,6 +161,11 @@
             "type": "boolean",
             "default": false,
             "description": "Enable QQ-zone / profile write tools (send/delete/like/comment/delete/profile/status). Off by default; when off the agent cannot see or call these tools."
+          },
+          "muteSystemNotices": {
+            "type": "boolean",
+            "default": true,
+            "description": "Mute system notices ([OpenClaw] ... / 💾 Learned: ...) from reaching the chat. Default true."
           }
         },
         "additionalProperties": false,
@@ -375,6 +380,11 @@
                 "type": "boolean",
                 "default": false,
                 "description": "Enable QQ-zone / profile write tools (send/delete/like/comment/delete/profile/status). Off by default; when off the agent cannot see or call these tools."
+              },
+              "muteSystemNotices": {
+                "type": "boolean",
+                "default": true,
+                "description": "Mute system notices ([OpenClaw] ... / 💾 Learned: ...) from reaching the chat. Default true."
               }
             },
             "additionalProperties": false
