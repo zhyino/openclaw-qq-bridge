@@ -157,4 +157,42 @@ describe('buildMessage — outbound QQ face emoji', () => {
     expect(buildMessage('hi', null)).toEqual([{ type: 'text', data: { text: 'hi' } }]);
     expect(buildMessage('hi', undefined)).toEqual([{ type: 'text', data: { text: 'hi' } }]);
   });
+
+  it('decodes [CQ:at,qq=...] into a real at segment', () => {
+    expect(buildMessage('[@10001] 在吗')).toEqual([
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'text', data: { text: ' 在吗' } },
+    ]);
+  });
+
+  it('decodes [@<n>] shorthand into an at segment', () => {
+    expect(buildMessage('[@10002] 你看')).toEqual([
+      { type: 'at', data: { qq: '10002' } },
+      { type: 'text', data: { text: ' 你看' } },
+    ]);
+  });
+
+  it('interleaves face, at and text in order', () => {
+    expect(buildMessage('哈哈[CQ:face,id=1][@10001] 快看[CQ:face,id=74]')).toEqual([
+      { type: 'text', data: { text: '哈哈' } },
+      { type: 'face', data: { id: '1' } },
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'text', data: { text: ' 快看' } },
+      { type: 'face', data: { id: '74' } },
+    ]);
+  });
+
+  it('still neutralises every other CQ code including at with non-numeric qq', () => {
+    expect(buildMessage('[CQ:at,qq=abc]')).toEqual([
+      { type: 'text', data: { text: '[CQ：at,qq=abc]' } },
+    ]);
+  });
+
+  it('keeps replyToId prepended before at segments', () => {
+    expect(buildMessage('[@10001] 收到', '42')).toEqual([
+      { type: 'reply', data: { id: '42' } },
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'text', data: { text: ' 收到' } },
+    ]);
+  });
 });

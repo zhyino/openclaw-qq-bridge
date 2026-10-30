@@ -244,10 +244,13 @@ function escapeCqText(text: string): string {
 }
 
 /**
- * `[CQ:face,id=<n>]` is decoded into a real OneBot face segment (so the agent
- * can send QQ native emoji); every OTHER `[CQ:...]` is still neutralised by
- * escapeCqText — an agent echoing `[CQ:image,file=http://attacker/x.png]` must
- * never emit real rich media. face is safe to whitelist: it carries only an id.
+ * Whitelisted rich segments in outbound text:
+ *  - `[CQ:face,id=<n>]`   → OneBot face (QQ native emoji) — carries only an id
+ *  - `[CQ:at,qq=<n>]`     → OneBot at (mention a member) — carries only a qq id
+ *  - `[@<n>]`             → same as at, friendlier shorthand for the model
+ * Every OTHER `[CQ:...]` is neutralised by escapeCqText — an agent echoing
+ * `[CQ:image,file=http://attacker/x.png]` must never emit real rich media.
+ * face/at are safe to whitelist: they carry only numeric ids.
  *
  * When `replyToId` is provided, a OneBot `reply` segment is prepended so the
  * message shows as a quote-reply to that message id.
@@ -259,7 +262,8 @@ export function buildMessage(text: string, replyToId?: string | null): OneBotMes
   }
   if (!text.trim()) return segments;
 
-  const FACE_RE = /\[CQ:face,\s*id=(\d+)\]/gi;
+  // One combined scan keeps segment order: text/face/at interleave correctly.
+  const RICH_RE = /\[CQ:face,\s*id=(\d+)\]|\[CQ:at,\s*qq=(\d+)\]|\[@(\d+)\]/gi;
   let lastIndex = 0;
   let pendingText = "";
   let match: RegExpExecArray | null;
@@ -271,12 +275,19 @@ export function buildMessage(text: string, replyToId?: string | null): OneBotMes
     }
   };
 
-  FACE_RE.lastIndex = 0;
-  while ((match = FACE_RE.exec(text)) !== null) {
+  RICH_RE.lastIndex = 0;
+  while ((match = RICH_RE.exec(text)) !== null) {
     pendingText += text.slice(lastIndex, match.index);
     flushText();
-    segments.push({ type: "face", data: { id: match[1] } });
-    lastIndex = FACE_RE.lastIndex;
+    if (match[1] !== undefined) {
+      segments.push({ type: "face", data: { id: match[1] } });
+    } else {
+      const qq = match[2] !== undefined ? match[2] : match[3];
+      if (qq !== undefined) {
+        segments.push({ type: "at", data: { qq } });
+      }
+    }
+    lastIndex = RICH_RE.lastIndex;
   }
   pendingText += text.slice(lastIndex);
   flushText();
