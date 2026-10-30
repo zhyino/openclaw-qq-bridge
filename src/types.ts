@@ -36,8 +36,15 @@ export interface OneBotAccountConfig {
   muteSystemNotices?: boolean;
   /** QQ ids whose messages are ignored entirely (bot-loop guard, manual list). */
   ignoreFrom?: string[];
-  /** Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true */
+  /**
+   * Rate-limit group messages from members SnowLuma flags `is_robot: true`.
+   * Default true: a bot's message is only admitted once per `botMinIntervalSec`,
+   * the rest are dropped — so the agent can still talk to a bot occasionally
+   * without the two bots looping into a flood.
+   */
   ignoreBots?: boolean;
+  /** Minimum seconds between admitted messages from the same bot (default 60). */
+  botMinIntervalSec?: number;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -66,8 +73,10 @@ export interface ResolvedOneBotAccount {
   muteSystemNotices: boolean;
   /** QQ ids whose messages are ignored entirely (bot-loop guard, manual list). */
   ignoreFrom?: string[];
-  /** Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true */
+  /** Rate-limit group messages from bot members (default true). */
   ignoreBots: boolean;
+  /** Minimum seconds between admitted messages from the same bot (default 60). */
+  botMinIntervalSec: number;
   config: OneBotAccountConfig;
 }
 

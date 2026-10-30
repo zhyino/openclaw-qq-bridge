@@ -123,6 +123,7 @@ export function resolveOneBotAccount(
     muteSystemNotices: accountConfig.muteSystemNotices !== false,
     ignoreFrom: accountConfig.ignoreFrom,
     ignoreBots: accountConfig.ignoreBots !== false,
+    botMinIntervalSec: accountConfig.botMinIntervalSec ?? 60,
     config: accountConfig,
   };
 }

@@ -65,7 +65,7 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
     vi.restoreAllMocks();
   });
 
-  it('drops a group message from a member SnowLuma flags is_robot:true', async () => {
+  it('admits a bot message, then rate-limits the same bot within the interval', async () => {
     // The bot lookup hits get_group_member_info; respond is_robot:true.
     (globalThis.fetch as any).mockImplementation((url: string) => {
       if (String(url).includes('/get_group_member_info')) {
@@ -93,6 +93,7 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
         httpUrl: 'http://x',
         allowFrom: ['group:806966728'],
         ignoreBots: true,
+        botMinIntervalSec: 60,
         groupAutoReact: false,
         groupAutoReactEmojiId: 1,
         config: {},
@@ -104,13 +105,79 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
     });
 
     await readyP;
+
+    // First bot message is admitted (rate-limit window is empty).
     runtimeState.state.lastDispatchArgs = null;
+    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot says hi'));
+    await vi.waitFor(() => {
+      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
+    }, { timeout: 5000 });
 
-    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'hello from bot'));
-
-    // give the async lookup + ingest time; nothing should reach the agent
+    // Second message from the same bot within 60s is rate-limited (dropped).
+    runtimeState.state.lastDispatchArgs = null;
+    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot says again'));
     await new Promise((r) => setTimeout(r, 1800));
     expect(runtimeState.state.lastDispatchArgs).toBeNull();
+
+    ac.abort();
+    await runP;
+    await wsServer.close();
+  });
+
+  it('re-admits the same bot after the rate-limit interval elapses', async () => {
+    (globalThis.fetch as any).mockImplementation((url: string) => {
+      if (String(url).includes('/get_group_member_info')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ status: 'ok', retcode: 0, data: { is_robot: true } }),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+    });
+
+    const wsServer = await startMockOneBotWsServer();
+    const ac = new AbortController();
+    const { startGateway } = await import('../src/gateway.js');
+
+    let readyResolve!: () => void;
+    const readyP = new Promise<void>((r) => (readyResolve = r));
+
+    const runP = startGateway({
+      account: makeAccount({
+        accountId: 'default',
+        enabled: true,
+        wsUrl: wsServer.wsUrl,
+        httpUrl: 'http://x',
+        allowFrom: ['group:806966728'],
+        ignoreBots: true,
+        botMinIntervalSec: 1, // 1s window so the test can wait it out
+        groupAutoReact: false,
+        groupAutoReactEmojiId: 1,
+        config: {},
+      }),
+      abortSignal: ac.signal,
+      cfg: {},
+      onReady: () => readyResolve(),
+      log: { info: () => {}, error: () => {}, debug: () => {} },
+    });
+
+    await readyP;
+
+    // First message admitted.
+    runtimeState.state.lastDispatchArgs = null;
+    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot #1'));
+    await vi.waitFor(() => {
+      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
+    }, { timeout: 5000 });
+
+    // Wait past the 1s window; the next bot message is admitted again.
+    await new Promise((r) => setTimeout(r, 1500));
+    runtimeState.state.lastDispatchArgs = null;
+    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot #2 after interval'));
+    await vi.waitFor(() => {
+      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
+    }, { timeout: 5000 });
 
     ac.abort();
     await runP;

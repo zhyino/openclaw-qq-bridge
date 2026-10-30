@@ -25,6 +25,7 @@ export function makeAccount(
     qzoneWrite: false,
     muteSystemNotices: true,
     ignoreBots: true,
+    botMinIntervalSec: 60,
     config: {},
     ...overrides,
   };

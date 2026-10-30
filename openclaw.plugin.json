@@ -175,7 +175,13 @@
           "ignoreBots": {
             "type": "boolean",
             "default": true,
-            "description": "Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true."
+            "description": "Rate-limit group messages from members SnowLuma flags `is_robot: true`. Default true: a bot's message is admitted once per botMinIntervalSec, the rest are dropped — so the agent can still talk to a bot occasionally without looping into a flood."
+          },
+          "botMinIntervalSec": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 60,
+            "description": "Minimum seconds between admitted messages from the same bot (default 60)."
           }
         },
         "additionalProperties": false,
@@ -404,7 +410,13 @@
               "ignoreBots": {
                 "type": "boolean",
                 "default": true,
-                "description": "Auto-ignore group messages from members SnowLuma flags `is_robot: true`. Default true."
+                "description": "Rate-limit group messages from members SnowLuma flags `is_robot: true`. Default true: a bot's message is admitted once per botMinIntervalSec, the rest are dropped — so the agent can still talk to a bot occasionally without looping into a flood."
+              },
+              "botMinIntervalSec": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 60,
+                "description": "Minimum seconds between admitted messages from the same bot (default 60)."
               }
             },
             "additionalProperties": false
