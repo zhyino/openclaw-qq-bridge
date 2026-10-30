@@ -258,13 +258,29 @@ export interface CommandAuthParams {
   cfg: OpenClawConfig;
   allowFrom?: string[];
   peerId: string;
+  /**
+   * The actual sender's QQ id. Command authorization is decided per sender,
+   * never per group: a `group:xxx` entry in allowFrom admits group messages
+   * but must NOT grant command rights to every member (CVE-style hole where
+   * anyone in the group could /reset the agent).
+   */
+  senderId: string;
 }
 
 export function resolveInboundCommandAuthorization(params: CommandAuthParams): boolean {
-  const { pluginRuntime, cfg, allowFrom, peerId } = params;
+  const { pluginRuntime, cfg, allowFrom, senderId } = params;
   const hasAllowFrom = Array.isArray(allowFrom) && allowFrom.length > 0;
+
+  // Command rights are personal. `group:xxx` / `group:*` entries only admit
+  // inbound messages; a bare `*` still grants commands (explicit operator choice).
   const senderAllowedForCommands =
-    hasAllowFrom && allowFrom!.some((pattern) => peerId === pattern || pattern === "*");
+    hasAllowFrom &&
+    allowFrom!.some((pattern) => {
+      if (pattern === "*") return true;
+      if (pattern.startsWith("group:")) return false;
+      const normalized = pattern.startsWith("private:") ? pattern.slice("private:".length) : pattern;
+      return normalized === senderId;
+    });
 
   const resolveCommandAuthorized = pluginRuntime.channel.commands?.resolveCommandAuthorizedFromAuthorizers;
 
@@ -327,6 +343,7 @@ export function buildInboundContext(params: InboundContextParams): {
     cfg,
     allowFrom: accountAllowFrom,
     peerId,
+    senderId,
   });
 
   const ctxPayload = pluginRuntime.channel.reply.finalizeInboundContext({

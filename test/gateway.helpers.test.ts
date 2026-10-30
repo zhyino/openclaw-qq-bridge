@@ -171,6 +171,7 @@ describe('gateway helpers', () => {
       cfg: {},
       allowFrom: ['private:42'],
       peerId: 'private:42',
+      senderId: '42',
     })).toBe(true);
 
     expect(resolveInboundCommandAuthorization({
@@ -178,6 +179,7 @@ describe('gateway helpers', () => {
       cfg: {},
       allowFrom: ['private:42'],
       peerId: 'private:99',
+      senderId: '99',
     })).toBe(false);
 
     expect(resolveInboundCommandAuthorization({
@@ -185,6 +187,7 @@ describe('gateway helpers', () => {
       cfg: {},
       allowFrom: undefined,
       peerId: 'private:42',
+      senderId: '42',
     })).toBe(false);
 
     const legacyRuntime = { channel: {} } as any;
@@ -193,6 +196,61 @@ describe('gateway helpers', () => {
       cfg: {},
       allowFrom: undefined,
       peerId: 'private:100',
+      senderId: '100',
     })).toBe(false);
+  });
+
+  it('never grants command rights from a group entry (group member cannot /reset)', () => {
+    const runtime = { channel: {} } as any;
+
+    // A listed group does not authorize commands for ANY member of it.
+    expect(resolveInboundCommandAuthorization({
+      pluginRuntime: runtime,
+      cfg: {},
+      allowFrom: ['group:806966728'],
+      peerId: 'group:806966728',
+      senderId: '55555',
+    })).toBe(false);
+
+    // Even the group owner's own QQ id is not in allowFrom, so still denied.
+    expect(resolveInboundCommandAuthorization({
+      pluginRuntime: runtime,
+      cfg: {},
+      allowFrom: ['group:806966728'],
+      peerId: 'group:806966728',
+      senderId: '10001',
+    })).toBe(false);
+  });
+
+  it('grants command rights to an individual listed by QQ id inside a group', () => {
+    const runtime = { channel: {} } as any;
+
+    expect(resolveInboundCommandAuthorization({
+      pluginRuntime: runtime,
+      cfg: {},
+      allowFrom: ['10001', 'group:806966728'],
+      peerId: 'group:806966728',
+      senderId: '10001',
+    })).toBe(true);
+
+    // A different member of the same listed group is still denied.
+    expect(resolveInboundCommandAuthorization({
+      pluginRuntime: runtime,
+      cfg: {},
+      allowFrom: ['10001', 'group:806966728'],
+      peerId: 'group:806966728',
+      senderId: '10002',
+    })).toBe(false);
+  });
+
+  it('honours an explicit * wildcard as command authorization', () => {
+    const runtime = { channel: {} } as any;
+    expect(resolveInboundCommandAuthorization({
+      pluginRuntime: runtime,
+      cfg: {},
+      allowFrom: ['*'],
+      peerId: 'group:1',
+      senderId: '99999',
+    })).toBe(true);
   });
 });
