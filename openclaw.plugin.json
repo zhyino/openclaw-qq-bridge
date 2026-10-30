@@ -172,6 +172,11 @@
             "items": { "type": "string" },
             "description": "QQ ids whose messages are ignored entirely (bot-loop guard, manual list)."
           },
+          "userLabels": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "description": "Display labels per QQ id, e.g. {\"10001\": \"主人\", \"10002\": \"女朋友\"}. Attached to the sender name so the agent can recognise the person."
+          },
           "ignoreBots": {
             "type": "boolean",
             "default": true,
@@ -412,6 +417,11 @@
                 "type": "array",
                 "items": { "type": "string" },
                 "description": "QQ ids whose messages are ignored entirely (bot-loop guard, manual list)."
+              },
+              "userLabels": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "Display labels per QQ id, e.g. {\"10001\": \"主人\", \"10002\": \"女朋友\"}. Attached to the sender name so the agent can recognise the person."
               },
               "ignoreBots": {
                 "type": "boolean",

@@ -1,6 +1,8 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import { formatInboundEnvelope } from "openclaw/plugin-sdk/channel-inbound";
 import type { OneBotMessageEvent, OneBotMessageSegment } from "../types.js";
+import type { ResolvedOneBotAccount } from "../types.js";
+import { isOwner } from "../policy.js";
 import type { BufferedMessage } from "./batch.js";
 
 /** Type-only handle on the plugin runtime (no runtime import: keeps mocking simple). */
@@ -309,8 +311,29 @@ export interface InboundContextParams {
   summary: BatchSummary;
   accountId: string;
   accountAllowFrom?: string[];
+  /** Resolved account — used to derive sender identity (owner / user labels). */
+  account?: ResolvedOneBotAccount;
   body: string;
   voiceMedia: VoiceMedia[];
+}
+
+/** A per-user display label attached to the sender name, e.g. "主人" / "女朋友". */
+function resolveSenderIdentityLabel(
+  account: ResolvedOneBotAccount | undefined,
+  senderId: string,
+): { isOwner: boolean; label?: string } {
+  const ownerFlag = account ? isOwner(account, senderId) : false;
+  if (ownerFlag) return { isOwner: ownerFlag, label: "主人" };
+
+  const labels = account?.userLabels;
+  if (labels && typeof labels === "object") {
+    for (const [qq, label] of Object.entries(labels)) {
+      if (String(qq) === String(senderId) && label) {
+        return { isOwner: ownerFlag, label: String(label) };
+      }
+    }
+  }
+  return { isOwner: ownerFlag };
 }
 
 export function buildInboundContext(params: InboundContextParams): {
@@ -318,8 +341,14 @@ export function buildInboundContext(params: InboundContextParams): {
   sessionKey: string;
   agentId: string;
 } {
-  const { pluginRuntime, cfg, summary, accountId, accountAllowFrom, body, voiceMedia } = params;
+  const { pluginRuntime, cfg, summary, accountId, accountAllowFrom, account, body, voiceMedia } = params;
   const { isGroup, senderId, senderName, peerId, address, combinedText } = summary;
+
+  // Derive who this sender is: owner gets "主人", configured userLabels get
+  // their label, everyone else is just their name. Attached to the name so the
+  // agent can recognise the person across chats, and surfaced as IsOwner.
+  const identity = resolveSenderIdentityLabel(account, senderId);
+  const labelledName = identity.label ? `${senderName}（${identity.label}）` : senderName;
 
   const route = pluginRuntime.channel.routing.resolveAgentRoute({
     cfg,
@@ -330,11 +359,11 @@ export function buildInboundContext(params: InboundContextParams): {
 
   const formatted = formatInboundEnvelope({
     channel: "OneBot",
-    from: senderName,
+    from: labelledName,
     timestamp: summary.last.event.time * 1000,
     body,
     chatType: isGroup ? "group" : "direct",
-    sender: { id: senderId, name: senderName },
+    sender: { id: senderId, name: labelledName },
     envelope: pluginRuntime.channel.reply.resolveEnvelopeFormatOptions(cfg),
   });
 
@@ -356,7 +385,8 @@ export function buildInboundContext(params: InboundContextParams): {
     AccountId: route.accountId,
     ChatType: isGroup ? "group" : "direct",
     SenderId: senderId,
-    SenderName: senderName,
+    SenderName: labelledName,
+    IsOwner: identity.isOwner,
     Provider: "onebot",
     Surface: "onebot",
     MessageSid: String(summary.last.event.message_id),

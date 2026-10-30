@@ -84,6 +84,7 @@ export function createBatchDispatcher(deps: DispatchDeps) {
         summary,
         accountId: account.accountId,
         accountAllowFrom: account.allowFrom,
+        account,
         body: summary.combinedText + attachmentInfo,
         voiceMedia,
       });

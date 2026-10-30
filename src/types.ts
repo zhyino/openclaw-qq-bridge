@@ -37,6 +37,12 @@ export interface OneBotAccountConfig {
   /** QQ ids whose messages are ignored entirely (bot-loop guard, manual list). */
   ignoreFrom?: string[];
   /**
+   * Display labels per QQ id, e.g. `{"10001": "主人", "10002": "女朋友"}`.
+   * Attached to the sender name in inbound context so the agent can recognise
+   * the person across chats.
+   */
+  userLabels?: Record<string, string>;
+  /**
    * Rate-limit group messages from members SnowLuma flags `is_robot: true`.
    * Default true: a bot's message is only admitted once per `botMinIntervalSec`,
    * the rest are dropped — so the agent can still talk to a bot occasionally
@@ -79,6 +85,8 @@ export interface ResolvedOneBotAccount {
   muteSystemNotices: boolean;
   /** QQ ids whose messages are ignored entirely (bot-loop guard, manual list). */
   ignoreFrom?: string[];
+  /** Display labels per QQ id (e.g. "主人" / "女朋友") attached to sender names. */
+  userLabels?: Record<string, string>;
   /** Rate-limit group messages from bot members (default true). */
   ignoreBots: boolean;
   /** Minimum seconds between admitted messages from the same bot (default 60). */
