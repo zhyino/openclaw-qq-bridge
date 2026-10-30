@@ -9,6 +9,7 @@ function mkAccount(overrides?: Partial<ResolvedOneBotAccount>): ResolvedOneBotAc
     wsUrl: "ws://127.0.0.1:1",
     httpUrl: "http://127.0.0.1:8080",
     qzoneWrite: true,
+    replyAudit: true,
     mediaAllowDirs: [],
     config: {},
     ...overrides,
@@ -223,5 +224,33 @@ describe("qzone-tools", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("qq_qzone_send: blocks sensitive content when replyAudit is on (default)", async () => {
+    mockOk({ tid: "t5", time: 1 });
+    const res = await runTool("qq_qzone_send", { content: "路径是 /etc/hostname" });
+    expect(res.details?.ok).toBe(false);
+    expect(String(res.content?.[0]?.text ?? "")).toContain("reply audit");
+  });
+
+  it("qq_qzone_send: skips audit when replyAudit is disabled (S-02)", async () => {
+    mockOk({ tid: "t6", time: 1 });
+    // replyAudit:false 时，即使内容含路径也放行（与消息通道一致）
+    const tools = buildQzoneAndProfileTools(mkAccount({ qzoneWrite: true, replyAudit: false }));
+    const tool = tools.find((t) => t.name === "qq_qzone_send")!;
+    const res = (await tool.execute("call-1", {
+      content: "路径是 /etc/hostname",
+    } as never)) as {
+      content?: Array<{ type?: string; text?: string }>;
+      details?: { ok?: boolean };
+    };
+    expect(res.details?.ok).toBe(true);
+  });
+
+  it("qq_profile_set: blocks sensitive signature when replyAudit is on (S-04)", async () => {
+    mockOk(null);
+    const res = await runTool("qq_profile_set", { personal_note: "sk-ABCDEFGHIJKLMNOPQRST" });
+    expect(res.details?.ok).toBe(false);
+    expect(String(res.content?.[0]?.text ?? "")).toContain("reply audit");
   });
 });

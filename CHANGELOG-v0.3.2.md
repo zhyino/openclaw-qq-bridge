@@ -222,3 +222,18 @@ SnowLuma 后端原生暴露一组 OneBot **扩展 action**（非 OneBot v11 标�
 | N-11 数字不一致 | 低 | 测试计数核实为 232 passed（含新增 N-01 正向用例） |
 
 **测试**：`test/qzone-tools.test.ts` 增至 **14 用例**（新增 http 拒绝 N-02、file:// 真实文件接受 N-01 正向用例）。全量 **21 files / 232 passed**。
+
+---
+
+## 十、自查修复（0.3.3 内部审计）
+
+（2026-10-30，独立通读 qzone-tools.ts 发现，不依赖外部复审）
+
+| 条目 | 级别 | 问题 | 修复 |
+| --- | --- | --- | --- |
+| S-01 | 低 | 文件头注释过时：还写"http(s)/base64 直传"，实际 N-02 已拒绝 | 更新注释，与代码一致 |
+| S-02 | 中 | qzone 写工具**无条件审计**，不尊重 `replyAudit: false`（消息通道只在 `replyAudit` 开启时审计，policy.ts:188） | send/comment 的审计改为 `if (account.replyAudit)` 才执行，与消息通道一致 |
+| S-03 | 低 | `HTTP://`/`File://` 大小写不匹配前缀判断，走错分支 | 用 `toLowerCase()` 统一判断 |
+| S-04 | 中 | `qq_profile_set` 的 personal_note（签名）没过审计——N-03 同类遗漏，签名也是公开展示文本 | profile_set 在 replyAudit 开启时审计 personal_note + nickname |
+
+**测试**：`test/qzone-tools.test.ts` 增至 **17 用例**（新增：默认审计拦截、replyAudit:false 跳过、签名审计拦截）。全量 **21 files / 235 passed**。

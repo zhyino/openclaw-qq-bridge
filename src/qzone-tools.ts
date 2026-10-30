@@ -13,12 +13,15 @@
  * （NapCat/go-cqhttp）调用会得到 retcode 错误。调用方（agent）得到的错误
  * 会原样透传，便于定位。
  *
- * 安全设计（v0.3.2 复审加固）：
+ * 安全设计（v0.3.2 复审加固 / v0.3.3 二轮复审加固）：
  *  - 写操作（发/删/点赞/评论/改签名）受 `qzoneWrite` 配置开关控制：
  *    未显式开启时这些工具根本不注册，agent 看不到、调不了。该开关与
  *    `outboundAllow` 完全解耦——发说说没有收件人，peer 白名单语义不适用。
- *  - 本地图片路径（file:// 或绝对路径）经过 `assertSafeMediaPath`（词法 +
- *    realpath 双检），与消息通道同一套媒体根白名单；http(s)/base64 直传。
+ *  - 图片只接受本地文件（file:// 或绝对路径），经 `assertSafeMediaPath`
+ *    （词法 + realpath 双检）与消息通道同一套媒体根白名单；http(s)/base64
+ *    一律拒绝（防 SSRF 外传）。
+ *  - 写工具正文（说说/评论/签名/昵称）在 `replyAudit` 开启时过 `auditReply`，
+ *    与消息通道同一规则。
  *  - Read-only 工具（看空间/看动态）不设白名单，但同样经过 account 检查。
  */
 import { Type, type Static } from "typebox";
@@ -91,13 +94,14 @@ async function callSnowLumaAction(
 function normalizeImageRef(account: ResolvedOneBotAccount, img: string): string {
   const trimmed = String(img).trim();
   if (!trimmed) return trimmed;
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("http://") || lower.startsWith("https://")) {
     throw new Error("qzone images support local files only (http(s) URLs are rejected)");
   }
-  if (trimmed.startsWith("base64://")) {
+  if (lower.startsWith("base64://")) {
     throw new Error("qzone images support local files only (base64:// is rejected)");
   }
-  if (trimmed.startsWith("file://")) {
+  if (lower.startsWith("file://")) {
     return assertSafeMediaPath(account, fileUriToPath(trimmed));
   }
   // 绝对路径或相对路径：视为本地文件，走白名单
@@ -252,10 +256,12 @@ export function buildQzoneAndProfileTools(
         }),
         write: true,
         execute: (p) => {
-          // N-03: 发说说内容与私聊消息同审计（拦本地路径/凭据，公开空间更该拦）
-          const audit = auditReply(String(p.content ?? ""));
-          if (!audit.ok) {
-            throw new Error(`qzone send blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+          // 与消息通道一致：仅 replyAudit 开启时审计（policy.ts assertOutboundAllowed 同规则）
+          if (account.replyAudit) {
+            const audit = auditReply(String(p.content ?? ""));
+            if (!audit.ok) {
+              throw new Error(`qzone send blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+            }
           }
           return callSnowLumaAction(account, "send_qzone_msg", {
             content: p.content,
@@ -338,10 +344,12 @@ export function buildQzoneAndProfileTools(
         }),
         write: true,
         execute: (p) => {
-          // N-03: 评论内容同样过审计
-          const audit = auditReply(String(p.content ?? ""));
-          if (!audit.ok) {
-            throw new Error(`qzone comment blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+          // 与消息通道一致：仅 replyAudit 开启时审计
+          if (account.replyAudit) {
+            const audit = auditReply(String(p.content ?? ""));
+            if (!audit.ok) {
+              throw new Error(`qzone comment blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+            }
           }
           return callSnowLumaAction(account, "comment_qzone", {
             tid: p.tid,
@@ -366,12 +374,21 @@ export function buildQzoneAndProfileTools(
           sex: Type.Optional(Type.Number({ description: "0 未知 / 1 男 / 2 女" })),
         }),
         write: true,
-        execute: (p) =>
-          callSnowLumaAction(account, "set_qq_profile", {
+        execute: (p) => {
+          // 签名/昵称也是公开展示文本，与消息通道一致在 replyAudit 开启时审计
+          const auditText = [p.personal_note, p.nickname].filter(Boolean).join("\n");
+          if (account.replyAudit && auditText) {
+            const audit = auditReply(auditText);
+            if (!audit.ok) {
+              throw new Error(`qzone profile blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+            }
+          }
+          return callSnowLumaAction(account, "set_qq_profile", {
             nickname: p.nickname,
             personal_note: p.personal_note,
             sex: p.sex,
-          }),
+          });
+        },
       }),
 
       makeTool(account, {
