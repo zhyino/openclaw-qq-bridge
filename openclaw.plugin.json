@@ -156,6 +156,11 @@
             "additionalProperties": {
               "$ref": "#/$defs/account"
             }
+          },
+          "qzoneWrite": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable QQ-zone / profile write tools (send/delete/like/comment/delete/profile/status). Off by default; when off the agent cannot see or call these tools."
           }
         },
         "additionalProperties": false,
@@ -365,6 +370,11 @@
               },
               "streaming": {
                 "$ref": "#/$defs/streaming"
+              },
+              "qzoneWrite": {
+                "type": "boolean",
+                "default": false,
+                "description": "Enable QQ-zone / profile write tools (send/delete/like/comment/delete/profile/status). Off by default; when off the agent cannot see or call these tools."
               }
             },
             "additionalProperties": false

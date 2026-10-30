@@ -22,6 +22,7 @@ function account(overrides: Partial<ResolvedOneBotAccount> = {}): ResolvedOneBot
     groupAutoReact: false,
     groupAutoReactEmojiId: 1,
     replyAudit: true,
+    qzoneWrite: false,
     config: {},
     ...overrides,
   };

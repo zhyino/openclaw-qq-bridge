@@ -8,15 +8,15 @@ function mkAccount(overrides?: Partial<ResolvedOneBotAccount>): ResolvedOneBotAc
     enabled: true,
     wsUrl: "ws://127.0.0.1:1",
     httpUrl: "http://127.0.0.1:8080",
+    qzoneWrite: true,
     config: {},
     ...overrides,
   } as ResolvedOneBotAccount;
 }
 
-const TOOL_NAMES = [
-  "qq_qzone_list",
-  "qq_qzone_feeds",
-  "qq_qzone_detail",
+const READ_TOOLS = ["qq_qzone_list", "qq_qzone_feeds", "qq_qzone_detail"];
+
+const WRITE_TOOLS = [
   "qq_qzone_send",
   "qq_qzone_delete",
   "qq_qzone_like",
@@ -38,11 +38,20 @@ describe("qzone-tools", () => {
     vi.restoreAllMocks();
   });
 
-  it("registers all qzone/profile tools when account is enabled", () => {
-    const tools = buildQzoneAndProfileTools(mkAccount());
-    const names = tools.map((t) => t.name).sort();
-    expect(names).toEqual([...TOOL_NAMES].sort());
-    for (const t of tools) {
+  it("registers read tools always; write tools only when qzoneWrite=true", () => {
+    // qzoneWrite=false → 只有读工具
+    const readOnly = buildQzoneAndProfileTools(mkAccount({ qzoneWrite: false }));
+    expect(readOnly.map((t) => t.name).sort()).toEqual([...READ_TOOLS].sort());
+    for (const w of WRITE_TOOLS) {
+      expect(readOnly.some((t) => t.name === w)).toBe(false);
+    }
+
+    // qzoneWrite=true → 全部 10 个
+    const all = buildQzoneAndProfileTools(mkAccount({ qzoneWrite: true }));
+    expect(all.map((t) => t.name).sort()).toEqual(
+      [...READ_TOOLS, ...WRITE_TOOLS].sort(),
+    );
+    for (const t of all) {
       expect(t.label).toBeTruthy();
       expect(t.description).toBeTruthy();
       expect(typeof t.execute).toBe("function");
@@ -54,12 +63,12 @@ describe("qzone-tools", () => {
   });
 
   async function runTool(name: string, params: Record<string, unknown>) {
-    const tools = buildQzoneAndProfileTools(mkAccount());
+    const tools = buildQzoneAndProfileTools(mkAccount({ qzoneWrite: true }));
     const tool = tools.find((t) => t.name === name)!;
     expect(tool).toBeDefined();
     return tool.execute("call-1", params as never) as Promise<{
       content?: Array<{ type?: string; text?: string }>;
-      details?: { ok?: boolean; data?: unknown; error?: unknown };
+      details?: { ok?: boolean; data?: unknown; error?: unknown; action?: unknown };
     }>;
   }
 
@@ -101,17 +110,18 @@ describe("qzone-tools", () => {
     expect(body.content).toBe("今天的学习记录");
     expect(body.ugc_right).toBe(1);
     expect(res.details?.data).toEqual({ tid: "new-tid", time: 1700000000 });
+    expect(res.details?.action).toBe("send_qzone_msg");
   });
 
-  it("qq_qzone_send: passes images and custom ugc_right", async () => {
+  it("qq_qzone_send: passes http images and custom ugc_right", async () => {
     mockOk({ tid: "t2", time: 1700000001 });
     await runTool("qq_qzone_send", {
       content: "带图",
-      images: ["file:///tmp/a.png"],
+      images: ["https://example.com/a.png"],
       ugc_right: 64,
     });
     const { body } = lastCall();
-    expect(body.images).toEqual(["file:///tmp/a.png"]);
+    expect(body.images).toEqual(["https://example.com/a.png"]);
     expect(body.ugc_right).toBe(64);
   });
 
@@ -171,5 +181,15 @@ describe("qzone-tools", () => {
     const res = await runTool("qq_qzone_feeds", {});
     expect(res.details?.ok).toBe(false);
     expect(String(res.content?.[0]?.text ?? "")).toContain("ECONNREFUSED");
+  });
+
+  it("rejects local image paths outside media roots (V-02 guard)", async () => {
+    mockOk({ tid: "t3", time: 1 });
+    const res = await runTool("qq_qzone_send", {
+      content: "带图",
+      images: ["file:///etc/hostname"],
+    });
+    expect(res.details?.ok).toBe(false);
+    expect(String(res.content?.[0]?.text ?? "")).toContain("media path not allowed");
   });
 });

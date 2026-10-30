@@ -22,6 +22,7 @@ export function makeAccount(
     groupAutoReact: false,
     groupAutoReactEmojiId: 1,
     replyAudit: true,
+    qzoneWrite: false,
     config: {},
     ...overrides,
   };

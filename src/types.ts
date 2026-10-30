@@ -30,6 +30,8 @@ export interface OneBotAccountConfig {
   replyAudit?: boolean;
   /** Extra directories the agent may send media files from (besides sharedDir). */
   mediaAllowDirs?: string[];
+  /** Enable QQ-zone/profile write tools (send/delete/like/comment/delete/profile/status). Default false */
+  qzoneWrite?: boolean;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -53,6 +55,7 @@ export interface ResolvedOneBotAccount {
   replyAudit: boolean;
   sharedDir?: string;
   mediaAllowDirs?: string[];
+  qzoneWrite: boolean;
   config: OneBotAccountConfig;
 }
 

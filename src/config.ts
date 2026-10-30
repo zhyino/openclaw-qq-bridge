@@ -119,6 +119,7 @@ export function resolveOneBotAccount(
     replyAudit,
     sharedDir: accountConfig.sharedDir,
     mediaAllowDirs: accountConfig.mediaAllowDirs,
+    qzoneWrite: accountConfig.qzoneWrite === true,
     config: accountConfig,
   };
 }

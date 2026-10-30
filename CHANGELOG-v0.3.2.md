@@ -176,3 +176,27 @@ SnowLuma 后端原生暴露一组 OneBot **扩展 action**（非 OneBot v11 标�
 - **安全边界**：写操作工具（发/删/点赞/评论/改签名）会真实对外生效——agent 是否被允许调用这些工具由宿主的 `tools` 策略控制，插件本身不绕过；只读工具（看空间/看动态）无白名单限制。
 - **风控提示**：`send_qzone_msg` 高频发布会被 QQ 空间风控（SnowLuma 官方注释明确），调用方需自行限流。
 - **测试**：`test/qzone-tools.test.ts` 新增 12 用例（注册齐全、参数构造、错误透传、网络失败不抛异常）。全量 **21 files / 230 passed**。
+
+---
+
+## 八、复审修复（VERIFY-v0.3.2 逐条落地）
+
+（2026-10-30，对独立验证报告的 13 条断言修复）
+
+| 条目 | 结论 | 修复 |
+| --- | --- | --- |
+| V-01 写操作零闸门 | 成立（高） | 新增 `qzoneWrite` 配置开关（默认 **false**）：未开启时写工具根本不注册，agent 看不到调不了；与 `outboundAllow` 完全解耦（发说说无收件人，peer 白名单不适用） |
+| V-02 images 无路径校验 | 成立（高） | 新增 `normalizeImageRef()`：本地路径（file:// / 绝对路径）走 `assertSafeMediaPath`（词法+realpath 双检，与消息通道同一套媒体根白名单）；http(s)/base64 直传 |
+| V-03 ugc_right 默认 1 | 成立（中，已降级） | 不修（好友少时收益接近零） |
+| V-04 发布包缺入口 | 成立（高） | `package.json` files 增加 `src/`、`index.ts`、`setup-entry.ts`；npm pack 已含主入口源码 |
+| V-05 四处依赖 dist | 成立（高） | 保留（`runtimeExtensions` 走 dist 是运行时正确路径；install.sh/prepare 需 dist 是发布语义） |
+| V-06 入站媒体旧字段 | 成立（中高，前瞻） | 不修（宿主 2026.10.x 仍迁移读取，功能正常；等宿主移除时再迁 `buildChannelInboundEventContext`） |
+| V-07 imageUrls 无效 | 成立（中） | 移除 `imageUrls` 透传（新版 `formatInboundEnvelope` 无此字段，静默忽略） |
+| V-08 senderLabel 丢 QQ 号 | 成立（中） | 改回 `sender: { id, name }`（宿主 `SenderLabelParams` 原生支持，带上 QQ 号） |
+| V-09 e2e 偶发超时 | 真机未复现 | 不修（二号机 Node 24 全量 21 files/231 passed 无超时） |
+| V-10 typebox 纯 ESM | 成立（低） | 已随 v0.3.2 打包进 bundledDependencies（Node 24+ 无风险） |
+| V-11 多账号恒用默认号 | 成立（中，宿主限制） | 宿主 `ChannelAgentToolFactory` 签名无 accountId，插件侧无法多账号分流；已在 CHANGELOG 注明 |
+| V-12 details.action 填工具名 | 成立（低） | 改为填真实 OneBot action 名（`send_qzone_msg` 等） |
+| V-13 parameters as never | 成立（中低） | 消除 `as never`，execute 参数用 typebox `Static` 推导 |
+
+**新增配置**：`channels.onebot.qzoneWrite`（boolean，默认 false）—— 顶层与 `accounts.*` 均可配置，已同步 manifest schema（守卫自动校验）。

@@ -161,7 +161,7 @@ export function buildInboundContext(params: InboundContextParams): {
   agentId: string;
 } {
   const { pluginRuntime, cfg, summary, accountId, accountAllowFrom, body, voiceMedia } = params;
-  const { isGroup, senderId, senderName, peerId, address, combinedText, combinedImages } = summary;
+  const { isGroup, senderId, senderName, peerId, address, combinedText } = summary;
 
   const route = pluginRuntime.channel.routing.resolveAgentRoute({
     cfg,
@@ -176,8 +176,7 @@ export function buildInboundContext(params: InboundContextParams): {
     timestamp: summary.last.event.time * 1000,
     body,
     chatType: isGroup ? "group" : "direct",
-    senderLabel: senderName,
-    ...(combinedImages.length > 0 ? { imageUrls: combinedImages } : {}),
+    sender: { id: senderId, name: senderName },
     envelope: pluginRuntime.channel.reply.resolveEnvelopeFormatOptions(cfg),
   });
 
