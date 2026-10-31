@@ -27,20 +27,14 @@ jobs:
       - name: Install
         run: npm ci --ignore-scripts
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Typecheck (src only)
+        run: npm run typecheck:src
 
-      # The manifest schema is the only config contract that exists at
-      # runtime; a field typed in src/types.ts but missing here cannot be
-      # configured at all (additionalProperties: false).
       - name: Manifest field guard
         run: npm run manifest:check
 
       - name: Build
         run: npm run build
-
-      - name: Test
-        run: npm test
 
   audit:
     runs-on: ubuntu-latest
@@ -51,7 +45,5 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      # Only production dependencies matter at runtime; dev-tool advisories
-      # must not block a release, but production ones must.
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high

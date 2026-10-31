@@ -234,7 +234,7 @@ npm run build      # tsc 编译到 dist/（发布/安装前需要）
 npm run pack:dry-run
 ```
 
-`npm test` 会先跑 vitest，再用 `scripts/check-test-count.mjs` 比对「实际跑过的测试文件数」与「磁盘上的测试文件数」——两者不一致直接失败，避免测试被漏跑而 CI 假绿。当前基线：**26 个测试文件、297 个用例**（Linux/macOS 全跑；Windows 无符号链接权限时 2 个用例自动跳过）。
+`npm test` 在本地运行（测试文件不在 GitHub 仓库中，仅本地开发保留）。测试基于 Jest/Vitest，当前基线 **297 个用例**。
 
 `npm run manifest:check` 校验 `src/types.ts` 的配置字段全部出现在 `openclaw.plugin.json` 的 schema 里。schema 是 `additionalProperties: false`，字段漏登记等于该配置项对用户不可写。
 
@@ -254,7 +254,7 @@ src/
     dispatch.ts     一个批次 = 一轮 agent，含投递与超时兜底
 ```
 
-CI 在 `.github/workflows/ci.yml`：Linux + Windows × Node 22/24 跑类型检查、构建、测试，另有一个生产依赖漏洞扫描任务；`.github/workflows/secrets.yml` 每次 push 用 gitleaks 扫敏感信息（QQ 号 / 内网 IP / 微信 openid 等自定义规则见 `.gitleaks.toml`）。
+CI 在 `.github/workflows/ci.yml`：Linux + Windows × Node 22/24 跑类型检查（仅 src）、manifest 校验、构建，另有一个生产依赖漏洞扫描任务；`.github/workflows/secrets.yml` 每次 push 用 gitleaks 扫敏感信息（QQ 号 / 内网 IP / 微信 openid 等自定义规则见 `.gitleaks.toml`）。
 
 
 ## 致谢

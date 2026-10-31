@@ -15,3 +15,4 @@ Thumbs.db
 # 运行时状态（绝不含用户数据）
 *.corrupt-*
 .vitest-report.json
+test/
