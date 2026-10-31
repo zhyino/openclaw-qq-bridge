@@ -162,6 +162,13 @@ openclaw gateway restart
 - 查找顺序：精确群号 → `"*"` → 账号默认 `wakePolicy`。私聊不受此策略影响（永远唤醒）。
 - 控制命令、@、戳一戳不受概率影响，永远优先。
 
+### 撤回消息（recall）
+
+收到 `notice/group_recall` / `friend_recall` 时记录被撤回的 `message_id`（TTL 10 分钟）：
+
+- **批处理阶段**：还没进入 agent 的撤回消息直接从批次里剔除；整批都被撤回时**不产生任何 agent 轮次**。
+- **回合进行中**：如果这一批消息在 agent 思考期间被撤回，回复会被**静默抑制**，不会答非所问。
+
 ### 戳一戳（poke）
 
 有人戳机器人时，插件把 `notice/notify/poke` 事件合成一条 `[戳一戳]` 入站消息，走与普通消息完全相同的路径（白名单、ignoreFrom、批处理、身份标签），agent 可以自然回应。只处理 `target_id == self_id`（戳的是本机器人）的事件，poke 之间互戳不触发。`pokeReply: false` 可关闭。

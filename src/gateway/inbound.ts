@@ -204,6 +204,8 @@ export interface BatchSummary {
   peerId: string;
   /** onebot:group:<id> / onebot:private:<id> — the address used by the SDK */
   address: string;
+  /** All message ids in this batch (used to drop recalled messages). */
+  messageIds: number[];
   combinedText: string;
   combinedImages: string[];
   combinedRecordSegments: OneBotMessageSegment[];
@@ -227,6 +229,7 @@ export function summarizeBatch(messages: BufferedMessage[]): BatchSummary {
     senderName,
     peerId,
     address: `onebot:${peerId}`,
+    messageIds: messages.map((m) => m.event.message_id),
     combinedText: messages.map((m) => m.text).filter(Boolean).join("\n"),
     combinedImages: messages.flatMap((m) => m.images),
     combinedRecordSegments: messages.flatMap((m) => m.recordSegments),

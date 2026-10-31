@@ -4,6 +4,7 @@ import { isSilent } from "../owner-control.js";
 import { redactSensitive } from "../policy.js";
 import { sendImage, sendRecord, sendText as sendOutboundText } from "../outbound.js";
 import { bumpSessionGeneration } from "../session-generation.js";
+import type { RecallTracker } from "../recall.js";
 import { cleanupVoiceFiles, processVoiceSegments } from "../voice.js";
 import type { BufferedMessage } from "./batch.js";
 import {
@@ -38,6 +39,8 @@ export interface DispatchDeps {
   cfg: OpenClawConfig;
   pluginRuntime: OneBotRuntime;
   log?: BridgeLog;
+  /** Tracks recalled message ids so a recalled message is never answered. */
+  recalls?: RecallTracker;
 }
 
 const RESPONSE_TIMEOUT_MS = 90_000;
@@ -56,29 +59,40 @@ function extOf(mediaPath: string): string {
  * a delivery failure without standing up a WebSocket.
  */
 export function createBatchDispatcher(deps: DispatchDeps) {
-  const { account, cfg, pluginRuntime, log } = deps;
+  const { account, cfg, pluginRuntime, log, recalls } = deps;
   const tag = `[onebot:${account.accountId}]`;
 
   return async function dispatchBatch(_batchKey: string, messages: BufferedMessage[]): Promise<void> {
     if (messages.length === 0) return;
-
-    const summary = summarizeBatch(messages);
-    const { isGroup, senderId, senderName, address } = summary;
-
-    if (messages.length > 1) {
-      log?.info(`${tag} Batched ${messages.length} messages from ${senderName}: ${summary.combinedText.slice(0, 100)}`);
-    }
 
     // Optional natural reply delay: waits before the agent turn starts, so a
     // quick follow-up message is more likely to join this batch and the reply
     // does not feel machine-fast. replyDelaySec is the BASE; the actual delay
     // is a random 0.5x-1.5x jitter of it, so consecutive replies never have
     // the exact same cadence. Configurable per account via replyDelaySec.
+    // It also gives a recall notice time to arrive before we spend a turn.
     if (account.replyDelaySec > 0) {
       const baseMs = account.replyDelaySec * 1000;
       const delayMs = Math.round(baseMs * (0.5 + Math.random()));
-      log?.info(`${tag} reply delay ${(delayMs / 1000).toFixed(1)}s before dispatching batch from ${senderName}`);
+      log?.info(`${tag} reply delay ${(delayMs / 1000).toFixed(1)}s before dispatching batch`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    // Drop recalled messages: replying to something the user withdrew is a bug.
+    const live = recalls ? messages.filter((m) => !recalls.isRecalled(m.event.message_id)) : messages;
+    if (live.length === 0) {
+      log?.info(`${tag} batch fully recalled (${messages.length} message(s)) — skipping turn`);
+      return;
+    }
+    if (live.length < messages.length) {
+      log?.info(`${tag} dropped ${messages.length - live.length} recalled message(s) from batch`);
+    }
+
+    const summary = summarizeBatch(live);
+    const { isGroup, senderId, senderName, address } = summary;
+
+    if (live.length > 1) {
+      log?.info(`${tag} Batched ${live.length} messages from ${senderName}: ${summary.combinedText.slice(0, 100)}`);
     }
 
     pluginRuntime.channel.activity.record({
@@ -224,6 +238,13 @@ export function createBatchDispatcher(deps: DispatchDeps) {
             if (timeoutId) {
               clearTimeout(timeoutId);
               timeoutId = null;
+            }
+
+            // Every message in this batch was recalled while the turn ran:
+            // stay silent instead of answering a withdrawn message.
+            if (recalls?.allRecalled(summary.messageIds)) {
+              log?.info(`${tag} reply suppressed: all ${summary.messageIds.length} message(s) were recalled`);
+              return;
             }
 
             log?.info(`${tag} deliver(${info.kind}): textLen=${payload.text?.length ?? 0}`);

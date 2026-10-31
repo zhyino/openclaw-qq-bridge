@@ -21,6 +21,7 @@ import { MessageBatcher, type BufferedMessage } from "./gateway/batch.js";
 import { extractImages, extractRecordSegments, extractText, stripStructuralPrefixes } from "./gateway/inbound.js";
 import { createBatchDispatcher, type BridgeLog } from "./gateway/dispatch.js";
 import { WakeDigest, isWakeMention, resolveWakePolicy } from "./wake.js";
+import { RecallTracker } from "./recall.js";
 
 export {
   FACE_NAMES,
@@ -78,6 +79,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let batcher: MessageBatcher | null = null;
   const wakeDigest = new WakeDigest();
+  const recalls = new RecallTracker();
 
   abortSignal.addEventListener("abort", () => {
     isAborted = true;
@@ -246,6 +248,19 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
    * agent can react naturally. Everything else is ignored.
    */
   const handleNotice = (notice: OneBotNoticeEvent) => {
+    // Recall (撤回): remember the id so the batcher drops it and an in-flight
+    // turn stays silent. Handled regardless of pokeReply.
+    if (notice.notice_type === "group_recall" || notice.notice_type === "friend_recall") {
+      const recalledId = Number(notice.message_id);
+      if (Number.isFinite(recalledId) && recalledId !== 0) {
+        recalls.mark(recalledId);
+        log?.info(
+          `${tag} ${notice.notice_type}: message ${recalledId} recalled (tracked=${recalls.size})`,
+        );
+      }
+      return;
+    }
+
     if (!account.pokeReply) return;
     if (notice.notice_type !== "notify" || notice.sub_type !== "poke") return;
     const selfId = Number(notice.self_id);
@@ -292,7 +307,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         gapMs: BATCH_GAP_MS,
         maxMessages: BATCH_MAX_MESSAGES,
         maxChars: BATCH_MAX_CHARS,
-        onFlush: createBatchDispatcher({ account, cfg, pluginRuntime, log }),
+        onFlush: createBatchDispatcher({ account, cfg, pluginRuntime, log, recalls }),
         onError: (err) => log?.error(`${tag} batch dispatch error: ${err}`),
       });
 
