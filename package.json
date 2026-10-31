@@ -3,6 +3,9 @@
   "displayName": "OpenClaw QQ Bridge",
   "version": "0.3.3",
   "description": "OpenClaw OneBot 11 channel plugin for QQ (SnowLuma/NapCat). Hardened: unified outbound gate, media path whitelist, execFile voice pipeline, CQ escaping, owner commands, slang learning.",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

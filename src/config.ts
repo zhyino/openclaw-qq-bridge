@@ -126,6 +126,7 @@ export function resolveOneBotAccount(
     ignoreBots: accountConfig.ignoreBots !== false,
     botMinIntervalSec: accountConfig.botMinIntervalSec ?? 60,
     outboundRateLimit: accountConfig.outboundRateLimit ?? 0,
+    replyDelaySec: accountConfig.replyDelaySec ?? 0,
     config: accountConfig,
   };
 }

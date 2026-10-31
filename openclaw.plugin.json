@@ -193,6 +193,12 @@
             "minimum": 0,
             "default": 0,
             "description": "Outbound anti-flood: minimum seconds between replies to the same target. Explicit replies (quoting a message) are exempt. Default 0 = disabled."
+          },
+          "replyDelaySec": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Natural reply delay (seconds) before responding to an inbound batch, so replies do not feel machine-fast and quick follow-ups can join the same batch. Default 0 = no delay."
           }
         },
         "additionalProperties": false,
@@ -439,6 +445,12 @@
                 "minimum": 0,
                 "default": 0,
                 "description": "Outbound anti-flood: minimum seconds between replies to the same target. Explicit replies (quoting a message) are exempt. Default 0 = disabled."
+              },
+              "replyDelaySec": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0,
+                "description": "Natural reply delay (seconds) before responding to an inbound batch, so replies do not feel machine-fast and quick follow-ups can join the same batch. Default 0 = no delay."
               }
             },
             "additionalProperties": false

@@ -57,6 +57,8 @@ export interface OneBotAccountConfig {
    * exempt. Default 0 = disabled.
    */
   outboundRateLimit?: number;
+  /** Natural reply delay (seconds) before responding to an inbound batch. Default 0 = no delay. */
+  replyDelaySec?: number;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -93,6 +95,8 @@ export interface ResolvedOneBotAccount {
   botMinIntervalSec: number;
   /** Outbound anti-flood: minimum seconds between replies to the same target. 0 = disabled. */
   outboundRateLimit: number;
+  /** Natural reply delay (seconds) before responding to an inbound batch. Default 0 = no delay. */
+  replyDelaySec: number;
   config: OneBotAccountConfig;
 }
 

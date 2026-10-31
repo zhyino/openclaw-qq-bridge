@@ -56,6 +56,14 @@ export function createBatchDispatcher(deps: DispatchDeps) {
       log?.info(`${tag} Batched ${messages.length} messages from ${senderName}: ${summary.combinedText.slice(0, 100)}`);
     }
 
+    // Optional natural reply delay: waits before the agent turn starts, so a
+    // quick follow-up message is more likely to join this batch and the reply
+    // does not feel machine-fast. Configurable per account via replyDelaySec.
+    if (account.replyDelaySec > 0) {
+      log?.info(`${tag} reply delay ${account.replyDelaySec}s before dispatching batch from ${senderName}`);
+      await new Promise((resolve) => setTimeout(resolve, account.replyDelaySec * 1000));
+    }
+
     pluginRuntime.channel.activity.record({
       channel: "onebot",
       accountId: account.accountId,
