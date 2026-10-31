@@ -1,0 +1,54 @@
+# Gitleaks custom rules for openclaw-qq-bridge.
+#
+# Default gitleaks rules only match credential *formats* (sk-, ghp_, Bearer,
+# etc). This repo's real risk is different: QQ ids (10-11 digit numbers),
+# LAN IPs, and WeChat openids that must never appear in source or history.
+# These rules close that gap. Test placeholders are 5-digit (10001 etc), well
+# below the QQ length floor, so no allowlist is needed for them.
+
+title = "openclaw-qq-bridge secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures that collide with the QQ-digit rule (not real ids)"
+regexes = [
+  # Exact Unix timestamps used as message times in fixtures
+  '''\b1700000000\b''',
+  '''\b1700000001\b''',
+  # Synthetic test group/member id in config tests
+  '''\b1007476107\b''',
+  # Fake full-length GitHub token in auditReply tests (test/policy.test.ts)
+  # e.g. ghp_abcdefghijklmnopqrstuvwxyz0123456789
+  '''ghp_[a-z0-9]{30,40}''',
+]
+
+# ── Rules ─────────────────────────────────────────────────────────────────────
+
+# QQ / WeChat numeric user ids: QQ ids are 5-11 digits, but common accounts are
+# 9-11 digits. Match standalone 10-11 digit numbers that are NOT message ids.
+# Message ids in this codebase are <= 9 digits or negative (SnowLuma returns
+# negative ids), so 10-11 digit standalone numbers are QQ ids in practice.
+[[rules]]
+id = "qq-numeric-id"
+description = "QQ / Tencent numeric user id (10-11 digits)"
+regex = '''\b\d{10,11}\b'''
+entropy = 0
+secretGroup = 0
+
+# WeChat openid: 28-char base62 with @im.wechat suffix
+[[rules]]
+id = "wechat-openid"
+description = "WeChat openid"
+regex = '''[A-Za-z0-9_-]{26,34}@im\.wechat'''
+entropy = 0
+secretGroup = 0
+
+# LAN IPs (192.168.x.x / 10.x.x.x / 172.16-31.x.x)
+[[rules]]
+id = "lan-ip"
+description = "LAN IP address"
+regex = '''\b(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b'''
+entropy = 0
+secretGroup = 1
