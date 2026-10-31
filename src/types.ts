@@ -43,15 +43,6 @@ export interface OneBotAccountConfig {
    */
   userLabels?: Record<string, string>;
   /**
-   * Rate-limit group messages from members SnowLuma flags `is_robot: true`.
-   * Default true: a bot's message is only admitted once per `botMinIntervalSec`,
-   * the rest are dropped — so the agent can still talk to a bot occasionally
-   * without the two bots looping into a flood.
-   */
-  ignoreBots?: boolean;
-  /** Minimum seconds between admitted messages from the same bot (default 60). */
-  botMinIntervalSec?: number;
-  /**
    * Outbound anti-flood: minimum seconds between replies to the same target
    * (`group:<id>` / `private:<id>`). Explicit replies (replyToId present) are
    * exempt. Default 0 = disabled.
@@ -89,10 +80,6 @@ export interface ResolvedOneBotAccount {
   ignoreFrom?: string[];
   /** Display labels per QQ id (e.g. "主人" / "女朋友") attached to sender names. */
   userLabels?: Record<string, string>;
-  /** Rate-limit group messages from bot members (default true). */
-  ignoreBots: boolean;
-  /** Minimum seconds between admitted messages from the same bot (default 60). */
-  botMinIntervalSec: number;
   /** Outbound anti-flood: minimum seconds between replies to the same target. 0 = disabled. */
   outboundRateLimit: number;
   /** Natural reply delay (seconds) before responding to an inbound batch. Default 0 = no delay. */

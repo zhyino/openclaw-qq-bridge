@@ -17,7 +17,7 @@ import { reactToMessage, sendText as sendOutboundText } from "./outbound.js";
 import { checkInboundAllowed, isCommandSenderAuthorized, isControlCommand, isIgnoredSender } from "./policy.js";
 import { handleControlCommand } from "./owner-control.js";
 import { MessageBatcher, type BufferedMessage } from "./gateway/batch.js";
-import { extractImages, extractRecordSegments, extractText } from "./gateway/inbound.js";
+import { extractImages, extractRecordSegments, extractText, stripStructuralPrefixes } from "./gateway/inbound.js";
 import { createBatchDispatcher, type BridgeLog } from "./gateway/dispatch.js";
 
 export {
@@ -147,9 +147,13 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
     const text = extractText(event.message, { selfId: event.self_id }) || event.raw_message;
     const trimmedText = text.trim();
+    // Command detection must ignore structural prefixes that extractText adds
+    // for @-mentions. Otherwise "@bot /reset" becomes "[被@] /reset", fails
+    // startsWith("/") and slips past the privilege gate as plain chat text.
+    const commandText = stripStructuralPrefixes(trimmedText);
 
-    if (trimmedText.startsWith("/") && isControlCommand(trimmedText)) {
-      const ctrl = handleControlCommand(trimmedText, account, senderId);
+    if (commandText.startsWith("/") && isControlCommand(commandText)) {
+      const ctrl = handleControlCommand(commandText, account, senderId);
       if (ctrl.handled) {
         if (ctrl.reply) {
           void sendOutboundText({ to: peerId, text: ctrl.reply, account })
@@ -158,7 +162,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
             })
             .catch((err) => log?.error(`${tag} owner reply failed: ${err}`));
         }
-        log?.info(`${tag} control command handled (ingest): ${trimmedText.slice(0, 40)}`);
+        log?.info(`${tag} control command handled (ingest): ${commandText.slice(0, 40)}`);
         return;
       }
     }
@@ -167,8 +171,8 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     // is only forwarded to the agent when the sender has command rights. An
     // unprivileged group member must never reach the agent with a command —
     // otherwise anyone in a listed group could reset or reconfigure the agent.
-    if (trimmedText.startsWith("/") && !isCommandSenderAuthorized(account, senderId)) {
-      log?.info(`${tag} dropping command from unprivileged sender ${senderId}: ${trimmedText.slice(0, 40)}`);
+    if (commandText.startsWith("/") && !isCommandSenderAuthorized(account, senderId)) {
+      log?.info(`${tag} dropping command from unprivileged sender ${senderId}: ${commandText.slice(0, 40)}`);
       return;
     }
 

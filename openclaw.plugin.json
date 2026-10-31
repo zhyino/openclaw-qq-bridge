@@ -2,7 +2,7 @@
   "id": "openclaw-qq-bridge",
   "name": "QQ Bridge",
   "description": "QQ via OneBot 11 with hardened outbound whitelist + owner commands + slang learning",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "channels": [
     "onebot"
   ],
@@ -169,24 +169,17 @@
           },
           "ignoreFrom": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "QQ ids whose messages are ignored entirely (bot-loop guard, manual list)."
           },
           "userLabels": {
             "type": "object",
-            "additionalProperties": { "type": "string" },
+            "additionalProperties": {
+              "type": "string"
+            },
             "description": "Display labels per QQ id, e.g. {\"10001\": \"主人\", \"10002\": \"女朋友\"}. Attached to the sender name so the agent can recognise the person."
-          },
-          "ignoreBots": {
-            "type": "boolean",
-            "default": true,
-            "description": "Rate-limit group messages from members SnowLuma flags `is_robot: true`. Default true: a bot's message is admitted once per botMinIntervalSec, the rest are dropped — so the agent can still talk to a bot occasionally without looping into a flood."
-          },
-          "botMinIntervalSec": {
-            "type": "integer",
-            "minimum": 1,
-            "default": 60,
-            "description": "Minimum seconds between admitted messages from the same bot (default 60)."
           },
           "outboundRateLimit": {
             "type": "integer",
@@ -421,24 +414,17 @@
               },
               "ignoreFrom": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "QQ ids whose messages are ignored entirely (bot-loop guard, manual list)."
               },
               "userLabels": {
                 "type": "object",
-                "additionalProperties": { "type": "string" },
+                "additionalProperties": {
+                  "type": "string"
+                },
                 "description": "Display labels per QQ id, e.g. {\"10001\": \"主人\", \"10002\": \"女朋友\"}. Attached to the sender name so the agent can recognise the person."
-              },
-              "ignoreBots": {
-                "type": "boolean",
-                "default": true,
-                "description": "Rate-limit group messages from members SnowLuma flags `is_robot: true`. Default true: a bot's message is admitted once per botMinIntervalSec, the rest are dropped — so the agent can still talk to a bot occasionally without looping into a flood."
-              },
-              "botMinIntervalSec": {
-                "type": "integer",
-                "minimum": 1,
-                "default": 60,
-                "description": "Minimum seconds between admitted messages from the same bot (default 60)."
               },
               "outboundRateLimit": {
                 "type": "integer",

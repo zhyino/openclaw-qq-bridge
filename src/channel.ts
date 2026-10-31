@@ -142,6 +142,12 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
       if (result.error) {
         throw new Error(result.error);
       }
+      // A deliberate silent drop (muted notice / rate limit) is not a failure.
+      // Returning without a messageId used to make the host report a delivery
+      // error; synthesise an id so "nothing sent on purpose" stays silent.
+      if (result.suppressed) {
+        return { channel: "onebot", messageId: `suppressed:${result.suppressed}` };
+      }
       if (!result.messageId) {
         throw new Error("OneBot sendText did not return a messageId");
       }

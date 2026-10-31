@@ -202,6 +202,22 @@ export function loadAndAudit({ manifestPath = "openclaw.plugin.json", typesPath 
 const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
 if (isMain) {
   const { typedFields, schema, violations } = loadAndAudit();
+
+  // Version consistency: package.json, package-lock.json and the manifest must
+  // agree, or the npm pack is indistinguishable from the previous release.
+  let versionMismatch = null;
+  try {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+    const manifest = JSON.parse(readFileSync("openclaw.plugin.json", "utf8"));
+    const versions = [pkg.version, lock.version, manifest.version];
+    if (new Set(versions.filter(Boolean)).size > 1) {
+      versionMismatch = `version mismatch: package.json=${pkg.version} package-lock.json=${lock.version} manifest=${manifest.version}`;
+    }
+  } catch {
+    versionMismatch = "could not read version fields (missing package.json / package-lock.json / openclaw.plugin.json?)";
+  }
+
   if (!typedFields) {
     console.error(`check-manifest-fields: ${violations[0]}`);
     process.exit(1);
@@ -212,6 +228,10 @@ if (isMain) {
       .map((n) => n.path)
       .join(", ")}`,
   );
+  if (versionMismatch) {
+    console.error(`\nFAIL — ${versionMismatch}`);
+    process.exit(1);
+  }
   if (violations.length > 0) {
     console.error(`\nFAIL — ${violations.length} violation(s):`);
     for (const v of violations) console.error(`  - ${v}`);

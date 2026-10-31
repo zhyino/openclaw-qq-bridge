@@ -24,8 +24,6 @@ function account(overrides: Partial<ResolvedOneBotAccount> = {}): ResolvedOneBot
     replyAudit: true,
     qzoneWrite: false,
     muteSystemNotices: true,
-    ignoreBots: true,
-    botMinIntervalSec: 60,
     outboundRateLimit: 0,
     replyDelaySec: 0,
     config: {},

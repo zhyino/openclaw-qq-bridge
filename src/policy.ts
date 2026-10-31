@@ -47,10 +47,8 @@ export function isSystemNotice(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
   if (t.startsWith("[OpenClaw]")) return true;
-  if (t.startsWith("💾 Learned:") || t.startsWith("💾 Learned ")) return true;
-  if (t.includes("Say \"undo\" to revert this skill change")) return true;
-  if (/^⚠️?\s*Agent couldn'?t generate a response/i.test(t)) return true;
-  if (t.includes("couldn't generate a response") || t.includes("could not generate a response")) return true;
+  if (/^💾 Learned[:\s]/u.test(t)) return true;
+  if (/^(?:⚠️)?\s*Agent (couldn'?t|could not) generate a response/i.test(t)) return true;
   return false;
 }
 
@@ -110,25 +108,33 @@ export function checkOutboundTarget(
 
 // ── Reply audit ──────────────────────────────────────────────────────────────
 
+// Prefix class: ASCII separators + CJK punctuation. Chinese users write
+// "路径：/etc/passwd" or 「/etc/passwd」 far more often than ASCII forms, and a
+// path leak is exactly what this audit exists to stop.
+const PATH_PREFIX = String.raw`(^|[\s"'=:,：，。、「」『』（）【】；！？·])`;
+
 const LOCAL_PATH_PATTERNS = [
-  /(^|[\s"'=:,])C:\\/i, // Windows absolute path
-  /(^|[\s"'=:,])\/[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_.-]+)+/, // Unix absolute path
-  /(^|[\s"'=:,])\/home\//i,
-  /(^|[\s"'=:,])\/Users\//i,
-  /(^|[\s"'=:,])\/tmp\//i,
-  /(^|[\s"'=:,])\/etc\//i,
-  /(^|[\s"'=:,])\/var\//i,
+  new RegExp(`${PATH_PREFIX}C:\\\\`, "i"), // Windows absolute path
+  new RegExp(`${PATH_PREFIX}\\/[a-zA-Z0-9_-]+(\\/[a-zA-Z0-9_.-]+)+`), // Unix absolute path
+  new RegExp(`${PATH_PREFIX}\\/home\\/`, "i"),
+  new RegExp(`${PATH_PREFIX}\\/Users\\/`, "i"),
+  new RegExp(`${PATH_PREFIX}\\/tmp\\/`, "i"),
+  new RegExp(`${PATH_PREFIX}\\/etc\\/`, "i"),
+  new RegExp(`${PATH_PREFIX}\\/var\\/`, "i"),
 ];
 
 const CREDENTIAL_PATTERNS = [
   /api[_-]?key\s*[:=]\s*\S+/i,
-  /sk-[A-Za-z0-9]{16,}/,
+  /sk-[A-Za-z0-9_-]{16,}/, // OpenAI (legacy sk- and sk-proj-)
   /token\s*[:=]\s*[A-Za-z0-9]{16,}/i,
   /password\s*[:=]\s*\S+/i,
   /secret\s*[:=]\s*\S+/i,
   /authorization\s*[:=]\s*Bearer\s+\S+/i,
   /AKIA[0-9A-Z]{16}/, // AWS access key
-  /gh[pousr]_[A-Za-z0-9]{20,}/i, // GitHub tokens
+  /gh[pousr]_[A-Za-z0-9]{20,}/i, // GitHub tokens (ghp_/gho_/ghu_/ghs_/ghr_)
+  /github_pat_[A-Za-z0-9_]{20,}/i, // GitHub fine-grained PAT
+  /glpat-[A-Za-z0-9_-]{16,}/i, // GitLab PAT
+  /xox[abprs]-[A-Za-z0-9-]{10,}/i, // Slack tokens
 ];
 
 export interface AuditResult {

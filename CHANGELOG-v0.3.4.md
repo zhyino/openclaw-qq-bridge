@@ -28,8 +28,7 @@
 | 层 | 配置 | 行为 |
 | --- | --- | --- |
 | 1. 手动拉黑 | `ignoreFrom: ["QQ号"]` | 这些号的消息**完全丢弃**（不走网络查询） |
-| 2. 自动识别 | `ignoreBots: true`（默认） | 查 `get_group_member_info` 的 `is_robot`，机器人消息限频（`botMinIntervalSec`，默认 60 秒内只放行第一条） |
-| 3. 出站限频 | `outboundRateLimit: 60` | 同一目标 60 秒内最多回一条，超出的静默丢弃；**被 @ / 显式引用时豁免** |
+| 2. 出站限频 | `outboundRateLimit: 60` | 同一目标 60 秒内最多回一条，超出的静默丢弃；**入站消息 @ 了机器人时豁免**（保证「被@必回」） |
 
 > 演变：从「完全丢弃机器人消息」按反馈改为「入站全放行 + 出站限频」——既避免两机器人死循环刷屏，又不误伤正常聊天。
 
@@ -61,9 +60,7 @@
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `muteSystemNotices` | `true` | 静默系统通知 |
-| `ignoreBots` | `true` | 自动识别机器人并限频 |
 | `ignoreFrom` | `[]` | 手动拉黑（完全丢弃） |
-| `botMinIntervalSec` | `60` | 机器人限频间隔 |
 | `outboundRateLimit` | `0` | 出站限频间隔（被 @ 豁免） |
 | `replyDelaySec` | `0` | 回复延迟基准（随机 0.5x~1.5x） |
 | `userLabels` | `{}` | 身份标签映射 |
@@ -79,5 +76,4 @@
 ## 五、兼容性
 
 - 所有新字段默认值保持旧行为（关闭/宽松），老配置无需改动。
-- `ignoreBots` 默认 `true`：如果之前依赖「机器人消息全部放行」的行为，需显式设 `false`。
 - `muteSystemNotices` 默认 `true`：如果之前希望系统通知进 agent，需显式设 `false`。

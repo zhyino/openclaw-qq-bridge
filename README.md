@@ -91,9 +91,7 @@ openclaw gateway restart
 | `groupAutoReact` | 群消息自动加 reaction | `false` |
 | `groupAutoReactEmojiId` | 自动 reaction 使用的表情 id | `1` |
 | `muteSystemNotices` | 静默丢弃系统通知（`[OpenClaw]` 前缀、`💾 Learned:` 等），不投递给 agent | `true` |
-| `ignoreBots` | 自动识别群内机器人（`get_group_member_info` 的 `is_robot`），机器人消息**限频**（见 `botMinIntervalSec`），避免两机器人互刷 | `true` |
 | `ignoreFrom` | 手动拉黑名单（QQ 号列表）：这些号的消息**完全丢弃**（不走网络查询，兜底 NTQQ 模拟的假机器人） | `[]` |
-| `botMinIntervalSec` | `ignoreBots` 开启时，同一机器人两条被放行消息的最小间隔（秒） | `60` |
 | `outboundRateLimit` | 出站限频：同一目标（群/私聊）最少间隔秒数内最多回一条，超出的静默丢弃。**被 @ / 显式引用时豁免**（保证「被@必回」） | `0`（不限） |
 | `replyDelaySec` | 回复前延迟的**基准秒数**，实际延迟随机取 `0.5x~1.5x`（让回复节奏自然、不机械） | `0`（不延迟） |
 | `userLabels` | 身份标签：`{"<QQ号>": "标签"}`，发送者名字会附上标签（如「昵称（主人）」），agent 能认出是谁 | `{}` |
@@ -120,15 +118,14 @@ openclaw gateway restart
 
 ### 防机器人互刷（群聊两机器人死循环）
 
-三层防护，从粗到细：
+两层防护：
 
 | 层 | 配置 | 行为 |
 | --- | --- | --- |
 | 1. 手动拉黑 | `ignoreFrom: ["QQ号"]` | 这些号的消息**完全丢弃**（不走网络查询，兜底 NTQQ 模拟的假机器人） |
-| 2. 自动识别 | `ignoreBots: true`（默认） | 查 `get_group_member_info` 的 `is_robot`，机器人消息限频（`botMinIntervalSec` 秒内只放行第一条） |
-| 3. 出站限频 | `outboundRateLimit: 60` | 入站全放行，但同一目标 60 秒内最多回一条，超出的静默丢弃；**被 @ / 显式引用时豁免** |
+| 2. 出站限频 | `outboundRateLimit: 60` | 入站全放行（上下文完整），但同一目标 60 秒内最多回一条，超出的静默丢弃；**入站消息 @ 了机器人时豁免**（保证「被@必回」） |
 
-最外层还有 `outboundRateLimit` 兜底：即使前两层没拦住，机器人刷屏也最多一分钟一条。
+> 限频判据是「目标 + 时间窗」，不认宿主自动补的 replyToId——否则每条回复都带引用，限频永远不触发。
 
 ### 媒体文件放在哪
 

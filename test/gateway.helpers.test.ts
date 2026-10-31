@@ -207,8 +207,8 @@ describe('gateway helpers', () => {
     expect(resolveInboundCommandAuthorization({
       pluginRuntime: runtime,
       cfg: {},
-      allowFrom: ['group:806966728'],
-      peerId: 'group:806966728',
+      allowFrom: ['group:100200'],
+      peerId: 'group:100200',
       senderId: '55555',
     })).toBe(false);
 
@@ -216,8 +216,8 @@ describe('gateway helpers', () => {
     expect(resolveInboundCommandAuthorization({
       pluginRuntime: runtime,
       cfg: {},
-      allowFrom: ['group:806966728'],
-      peerId: 'group:806966728',
+      allowFrom: ['group:100200'],
+      peerId: 'group:100200',
       senderId: '10001',
     })).toBe(false);
   });
@@ -228,8 +228,8 @@ describe('gateway helpers', () => {
     expect(resolveInboundCommandAuthorization({
       pluginRuntime: runtime,
       cfg: {},
-      allowFrom: ['10001', 'group:806966728'],
-      peerId: 'group:806966728',
+      allowFrom: ['10001', 'group:100200'],
+      peerId: 'group:100200',
       senderId: '10001',
     })).toBe(true);
 
@@ -237,8 +237,8 @@ describe('gateway helpers', () => {
     expect(resolveInboundCommandAuthorization({
       pluginRuntime: runtime,
       cfg: {},
-      allowFrom: ['10001', 'group:806966728'],
-      peerId: 'group:806966728',
+      allowFrom: ['10001', 'group:100200'],
+      peerId: 'group:100200',
       senderId: '10002',
     })).toBe(false);
   });

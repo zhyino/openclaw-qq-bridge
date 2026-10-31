@@ -42,8 +42,6 @@ function makeAccount(overrides: Partial<ResolvedOneBotAccount> = {}): ResolvedOn
     replyAudit: true,
     qzoneWrite: false,
     muteSystemNotices: true,
-    ignoreBots: true,
-    botMinIntervalSec: 60,
     outboundRateLimit: 0,
     replyDelaySec: 0,
     config: {},
@@ -105,7 +103,7 @@ describe('auditReply', () => {
   });
 
   it('blocks unix absolute paths', () => {
-    const r = auditReply('配置在 /home/dafeiyu/.openclaw/openclaw.json 里');
+    const r = auditReply('配置在 /home/user/.openclaw/openclaw.json 里');
     expect(r.ok).toBe(false);
     expect(r.reason).toContain('local path');
   });
@@ -181,14 +179,14 @@ describe('assertOutboundAllowed (H1 unified gate)', () => {
 
   it('blocks audited text even for allowed target', () => {
     const acc = makeAccount({ outboundAllow: ['group:1'], replyAudit: true });
-    const r = assertOutboundAllowed(acc, 'group:1', '路径是 /home/dafeiyu/x');
+    const r = assertOutboundAllowed(acc, 'group:1', '路径是 /home/user/x');
     expect(r.allowed).toBe(false);
     expect(r.reason).toMatch(/local path|credential/);
   });
 
   it('skips audit when replyAudit is false', () => {
     const acc = makeAccount({ outboundAllow: ['group:1'], replyAudit: false });
-    expect(assertOutboundAllowed(acc, 'group:1', '路径是 /home/dafeiyu/x').allowed).toBe(true);
+    expect(assertOutboundAllowed(acc, 'group:1', '路径是 /home/user/x').allowed).toBe(true);
   });
 });
 

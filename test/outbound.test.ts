@@ -360,7 +360,7 @@ describe('outbound rate limit (outboundRateLimit)', () => {
     expect((globalThis.fetch as any).mock.calls).toHaveLength(2);
   });
 
-  it('exempts explicit replies (replyToId present) from the rate limit', async () => {
+  it('exempts a genuine inbound @-mention (exemptRateLimit) from the rate limit', async () => {
     (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
@@ -372,10 +372,30 @@ describe('outbound rate limit (outboundRateLimit)', () => {
     const to = `private:${930000 + Math.floor(Math.random() * 100000)}`;
 
     await sendText({ to, text: 'first', account });
-    const second = await sendText({ to, text: 'explicit reply', replyToId: '12345', account });
+    const second = await sendText({ to, text: '@-mention reply', exemptRateLimit: true, account });
 
     expect(second.error).toBeUndefined();
     expect((globalThis.fetch as any).mock.calls).toHaveLength(2);
+  });
+
+  it('does NOT exempt a host-implicit replyToId from the rate limit (H-1)', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 8 } }),
+    });
+
+    const account = mkAccount({ outboundRateLimit: 60 });
+    const to = `private:${950000 + Math.floor(Math.random() * 100000)}`;
+
+    await sendText({ to, text: 'first', account });
+    // Host fills replyToId for EVERY reply by default — it must NOT exempt.
+    const second = await sendText({ to, text: 'second', replyToId: '555', account });
+
+    expect(second.error).toBeUndefined();
+    expect(second.suppressed).toBe('rate-limit');
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
   });
 
   it('does not rate-limit when outboundRateLimit is 0 (disabled)', async () => {

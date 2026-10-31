@@ -29,6 +29,7 @@ import type { AnyAgentTool } from "openclaw/plugin-sdk/core";
 import type { ResolvedOneBotAccount } from "./types.js";
 import { assertSafeMediaPath, auditReply } from "./policy.js";
 import { fileUriToPath } from "./paths.js";
+import { resolveNapCatMediaUri } from "./outbound.js";
 
 const API_TIMEOUT_MS = 15_000;
 
@@ -91,7 +92,7 @@ async function callSnowLumaAction(
  *    SnowLuma 会去抓取内网/云元数据地址并把结果外传到空间图床，构成
  *    SSRF 外传通道。
  */
-function normalizeImageRef(account: ResolvedOneBotAccount, img: string): string {
+async function normalizeImageRef(account: ResolvedOneBotAccount, img: string): Promise<string> {
   const trimmed = String(img).trim();
   if (!trimmed) return trimmed;
   const lower = trimmed.toLowerCase();
@@ -101,11 +102,11 @@ function normalizeImageRef(account: ResolvedOneBotAccount, img: string): string 
   if (lower.startsWith("base64://")) {
     throw new Error("qzone images support local files only (base64:// is rejected)");
   }
-  if (lower.startsWith("file://")) {
-    return assertSafeMediaPath(account, fileUriToPath(trimmed));
-  }
-  // 绝对路径或相对路径：视为本地文件，走白名单
-  return assertSafeMediaPath(account, trimmed);
+  const localPath = lower.startsWith("file://") ? fileUriToPath(trimmed) : trimmed;
+  // Same choke point as the message path: validate against the media roots and
+  // copy into the shared dir, then hand SnowLuma a container-visible URI. A
+  // bare host path breaks every Docker deployment (SnowLuma can't see it).
+  return resolveNapCatMediaUri(account, localPath, "images");
 }
 
 function makeTool(
@@ -245,7 +246,7 @@ export function buildQzoneAndProfileTools(
         parameters: Type.Object({
           content: Type.String({ description: "说说正文" }),
           images: Type.Optional(
-            Type.Array(Type.String({ description: "图片 URL / file:// / base64://" })),
+            Type.Array(Type.String({ description: "本地图片路径（file:// 或绝对路径）；http(s)/base64 会被拒绝" })),
           ),
           ugc_right: Type.Optional(
             Type.Number({ description: "查看权限 1/4/16/64/128", default: 1 }),
@@ -255,7 +256,7 @@ export function buildQzoneAndProfileTools(
           ),
         }),
         write: true,
-        execute: (p) => {
+        execute: async (p) => {
           // 与消息通道一致：仅 replyAudit 开启时审计（policy.ts assertOutboundAllowed 同规则）
           if (account.replyAudit) {
             const audit = auditReply(String(p.content ?? ""));
@@ -266,7 +267,7 @@ export function buildQzoneAndProfileTools(
           return callSnowLumaAction(account, "send_qzone_msg", {
             content: p.content,
             images: Array.isArray(p.images)
-              ? p.images.map((img: string) => normalizeImageRef(account, img))
+              ? await Promise.all(p.images.map((img: string) => normalizeImageRef(account, img)))
               : undefined,
             ugc_right: p.ugc_right ?? 1,
             target_uins: p.target_uins,
@@ -339,11 +340,11 @@ export function buildQzoneAndProfileTools(
           content: Type.String({ description: "评论内容" }),
           target_uin: Type.Optional(Type.String({ description: "说说所属 QQ 号" })),
           images: Type.Optional(
-            Type.Array(Type.String({ description: "图片 URL / file:// / base64://" })),
+            Type.Array(Type.String({ description: "本地图片路径（file:// 或绝对路径）；http(s)/base64 会被拒绝" })),
           ),
         }),
         write: true,
-        execute: (p) => {
+        execute: async (p) => {
           // 与消息通道一致：仅 replyAudit 开启时审计
           if (account.replyAudit) {
             const audit = auditReply(String(p.content ?? ""));
@@ -356,7 +357,7 @@ export function buildQzoneAndProfileTools(
             content: p.content,
             target_uin: p.target_uin,
             images: Array.isArray(p.images)
-              ? p.images.map((img: string) => normalizeImageRef(account, img))
+              ? await Promise.all(p.images.map((img: string) => normalizeImageRef(account, img)))
               : undefined,
           });
         },
@@ -403,12 +404,20 @@ export function buildQzoneAndProfileTools(
           face_type: Type.Optional(Type.Number({ description: "图标类型", default: 1 })),
         }),
         write: true,
-        execute: (p) =>
-          callSnowLumaAction(account, "set_diy_online_status", {
+        execute: (p) => {
+          // 在线状态文案是公开展示文本：与签名/说说同规则，replyAudit 开启时审计
+          if (account.replyAudit) {
+            const audit = auditReply(String(p.wording ?? ""));
+            if (!audit.ok) {
+              throw new Error(`qzone status blocked by reply audit: ${audit.reason ?? "sensitive content"}`);
+            }
+          }
+          return callSnowLumaAction(account, "set_diy_online_status", {
             face_id: p.face_id ?? 14,
             face_type: p.face_type ?? 1,
             wording: p.wording ?? "",
-          }),
+          });
+        },
       }),
     );
   }

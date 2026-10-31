@@ -171,6 +171,21 @@ export function extractImages(segments: OneBotMessageSegment[]): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Strip the structural prefixes `extractText` adds for @-mentions so a command
+ * is still recognised as a command. "@bot /reset" becomes "[被@] /reset"; a
+ * startsWith("/") check on the raw text would miss it and let an unprivileged
+ * group member's command reach the agent as ordinary chat.
+ */
+export function stripStructuralPrefixes(text: string): string {
+  let out = text.trim();
+  for (;;) {
+    const next = out.replace(/^(?:\[被@全体\]|\[被@\]|\[@\d+\])\s*/u, "");
+    if (next === out) return out;
+    out = next;
+  }
+}
+
 export function extractRecordSegments(segments: OneBotMessageSegment[]): OneBotMessageSegment[] {
   return segments.filter((seg) => seg.type === "record");
 }
@@ -267,11 +282,18 @@ export interface CommandAuthParams {
    * anyone in the group could /reset the agent).
    */
   senderId: string;
+  /** Resolved account — ownerQQ grants command rights independent of allowFrom. */
+  account?: ResolvedOneBotAccount;
 }
 
 export function resolveInboundCommandAuthorization(params: CommandAuthParams): boolean {
-  const { pluginRuntime, cfg, allowFrom, senderId } = params;
+  const { pluginRuntime, cfg, allowFrom, senderId, account } = params;
   const hasAllowFrom = Array.isArray(allowFrom) && allowFrom.length > 0;
+
+  // The owner always has command rights — even when not listed in allowFrom.
+  // The ingest gate (policy.isCommandSenderAuthorized) already uses this rule;
+  // both layers must agree or the owner's commands are silently downgraded.
+  const senderIsOwner = account ? isOwner(account, senderId) : false;
 
   // Command rights are personal. `group:xxx` / `group:*` entries only admit
   // inbound messages; a bare `*` still grants commands (explicit operator choice).
@@ -287,13 +309,14 @@ export function resolveInboundCommandAuthorization(params: CommandAuthParams): b
   const resolveCommandAuthorized = pluginRuntime.channel.commands?.resolveCommandAuthorizedFromAuthorizers;
 
   if (typeof resolveCommandAuthorized !== "function") {
-    return senderAllowedForCommands;
+    return senderIsOwner || senderAllowedForCommands;
   }
 
   return resolveCommandAuthorized({
     // 2026.10.8: commands.useAccessGroups retired; runtime defaults to true
     useAccessGroups: true,
     authorizers: [
+      { configured: senderIsOwner, allowed: senderIsOwner },
       {
         configured: hasAllowFrom,
         allowed: senderAllowedForCommands,
@@ -373,6 +396,7 @@ export function buildInboundContext(params: InboundContextParams): {
     allowFrom: accountAllowFrom,
     peerId,
     senderId,
+    account,
   });
 
   const ctxPayload = pluginRuntime.channel.reply.finalizeInboundContext({

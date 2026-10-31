@@ -33,6 +33,10 @@ export interface OutboundContext {
   text: string;
   accountId?: string | null;
   replyToId?: string | null;
+  /** Exempt this send from outboundRateLimit (inbound @-mention / explicit reply). */
+  exemptRateLimit?: boolean;
+  /** Send even if the text looks like a system notice (plugin diagnostics). */
+  bypassMute?: boolean;
   account: ResolvedOneBotAccount;
 }
 
@@ -41,6 +45,8 @@ export interface OutboundResult {
   messageId?: string;
   timestamp?: string | number;
   error?: string;
+  /** Deliberate silent drop: not a failure, nothing was sent. */
+  suppressed?: "system-notice" | "rate-limit";
 }
 
 export type OneBotReactionResult = {
@@ -89,11 +95,13 @@ const outboundLastSent = new Map<string, number>();
 function isOutboundRateLimited(
   account: ResolvedOneBotAccount,
   to: string,
-  replyToId?: string | null,
+  exempt?: boolean,
 ): boolean {
   const intervalSec = account.outboundRateLimit;
   if (!intervalSec) return false;
-  if (replyToId != null && String(replyToId).trim() !== "") return false; // explicit reply exempt
+  // Only a genuine inbound @-mention / explicit quote may bypass the limit.
+  // Host-implicit replyToId (filled for every reply by default) must NOT.
+  if (exempt) return false;
   const now = Date.now();
   const last = outboundLastSent.get(to) ?? 0;
   if (now - last < intervalSec * 1000) return true;
@@ -155,11 +163,18 @@ async function dispatchSend(
   account: ResolvedOneBotAccount,
   to: string,
   segments: OneBotMessageSegment[],
-  options: { auditText?: string; timeoutMs?: number } = {},
+  options: { auditText?: string; timeoutMs?: number; bypassMute?: boolean } = {},
 ): Promise<{ result: OneBotApiResponse; endpoint: string }> {
   // System notices are muted before the whitelist/audit gates so they never
-  // even reach the OneBot socket when the operator doesn't want them.
-  if (account.muteSystemNotices && options.auditText != null && isSystemNotice(options.auditText)) {
+  // even reach the OneBot socket when the operator doesn't want them. The
+  // plugin's own diagnostics opt out via bypassMute — muting those would leave
+  // the user with total silence when something breaks.
+  if (
+    !options.bypassMute &&
+    account.muteSystemNotices &&
+    options.auditText != null &&
+    isSystemNotice(options.auditText)
+  ) {
     throw new SystemNoticeMutedError("system notice muted by muteSystemNotices");
   }
 
@@ -235,7 +250,7 @@ async function pruneStagedMedia(rootDir: string): Promise<void> {
  * Media choke point. Resolves a local path to the URI NapCat should read, and
  * is the only place allowed to touch an untrusted path before it leaves.
  */
-async function resolveNapCatMediaUri(
+export async function resolveNapCatMediaUri(
   account: ResolvedOneBotAccount,
   filePath: string,
   kind: "audio" | "images" | "files",
@@ -341,22 +356,26 @@ export function buildMessage(text: string, replyToId?: string | null): OneBotMes
 // ── Public senders ───────────────────────────────────────────────────────────
 
 export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
-  const { to, text, account, replyToId } = ctx;
+  const { to, text, account, replyToId, exemptRateLimit, bypassMute } = ctx;
 
   if (!account.httpUrl) {
     return { channel: "onebot", error: "OneBot not configured (missing httpUrl)" };
   }
 
   try {
-    // Outbound anti-flood: drop an un-explicit reply to a target sent too soon
-    // after the previous one (silently, like a muted notice).
-    if (isOutboundRateLimited(account, to, replyToId)) {
+    // Outbound anti-flood: drop a reply to a target sent too soon after the
+    // previous one (silently, like a muted notice). Only an inbound @-mention
+    // or explicit quote exempts it.
+    if (isOutboundRateLimited(account, to, exemptRateLimit)) {
       throw new OutboundRateLimitedError(
         `outbound rate-limited: ${to} (interval ${account.outboundRateLimit}s)`,
       );
     }
 
-    const { result } = await dispatchSend(account, to, buildMessage(text, replyToId), { auditText: text });
+    const { result } = await dispatchSend(account, to, buildMessage(text, replyToId), {
+      auditText: text,
+      bypassMute,
+    });
 
     if (result.retcode !== 0) {
       return {
@@ -372,9 +391,13 @@ export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
     };
   } catch (err) {
     // A muted system notice or a rate-limited reply is a deliberate silent
-    // drop: no error, no log.
-    if (err instanceof SystemNoticeMutedError || err instanceof OutboundRateLimitedError) {
-      return { channel: "onebot" };
+    // drop: no error, no log — but callers get an explicit `suppressed` flag so
+    // the adapter layer can tell "nothing sent on purpose" from "send failed".
+    if (err instanceof SystemNoticeMutedError) {
+      return { channel: "onebot", suppressed: "system-notice" };
+    }
+    if (err instanceof OutboundRateLimitedError) {
+      return { channel: "onebot", suppressed: "rate-limit" };
     }
     return { channel: "onebot", error: err instanceof Error ? err.message : String(err) };
   }

@@ -17,8 +17,6 @@ regexes = [
   # Exact Unix timestamps used as message times in fixtures
   '''\b1700000000\b''',
   '''\b1700000001\b''',
-  # Synthetic test group/member id in config tests
-  '''\b1007476107\b''',
   # Fake full-length GitHub token in auditReply tests (test/policy.test.ts)
   # e.g. ghp_abcdefghijklmnopqrstuvwxyz0123456789
   '''ghp_[a-z0-9]{30,40}''',
@@ -37,8 +35,8 @@ paths = [
 # negative ids), so 10-11 digit standalone numbers are QQ ids in practice.
 [[rules]]
 id = "qq-numeric-id"
-description = "QQ / Tencent numeric user id (10-11 digits)"
-regex = '''\b\d{10,11}\b'''
+description = "QQ / Tencent numeric user id or group id (9-11 digits)"
+regex = '''\b\d{9,11}\b'''
 entropy = 0
 secretGroup = 0
 

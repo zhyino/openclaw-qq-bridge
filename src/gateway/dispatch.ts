@@ -121,9 +121,11 @@ export function createBatchDispatcher(deps: DispatchDeps) {
     const sendErrorText = async (raw: string) => {
       // Redact rather than drop: blocking the error message leaves the user
       // with silence AND no diagnostic, which is strictly worse.
+      // bypassMute: these are OUR diagnostics, not host-injected notices — a
+      // muteSystemNotices default must not swallow them.
       const text = redactSensitive(raw).slice(0, 300);
       try {
-        const result = await sendOutboundText({ to: address, text, account });
+        const result = await sendOutboundText({ to: address, text, account, bypassMute: true });
         if (result?.error) {
           log?.warn?.(`${tag} error notice blocked/failed: ${result.error}`);
         }
@@ -207,6 +209,12 @@ export function createBatchDispatcher(deps: DispatchDeps) {
                 text: replyText,
                 replyToId:
                   payload.replyToId != null ? String(payload.replyToId) : null,
+                // "Must answer when @-ed": an inbound @-mention (or @all) exempts
+                // this reply from the outbound rate limit. Host-implicit
+                // replyToId does NOT count — every reply carries one by default.
+                exemptRateLimit:
+                  summary.combinedText.includes("[被@]") ||
+                  summary.combinedText.includes("[被@全体]"),
                 account,
               });
               if (sendResult?.error) {

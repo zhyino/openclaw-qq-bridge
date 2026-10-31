@@ -52,7 +52,7 @@ describe('isIgnoredSender (manual ignoreFrom list)', () => {
   });
 });
 
-describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
+describe('gateway bot-loop guard (ignoreFrom drops before dispatch)', () => {
   const oldFetch = globalThis.fetch;
 
   beforeEach(() => {
@@ -65,19 +65,7 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
     vi.restoreAllMocks();
   });
 
-  it('forwards bot messages inbound (no inbound bot filter anymore)', async () => {
-    // The bot lookup hits get_group_member_info; respond is_robot:true.
-    (globalThis.fetch as any).mockImplementation((url: string) => {
-      if (String(url).includes('/get_group_member_info')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ status: 'ok', retcode: 0, data: { is_robot: true } }),
-        });
-      }
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
-    });
-
+  it('drops messages from an ignoreFrom sender, forwards everyone else', async () => {
     const wsServer = await startMockOneBotWsServer();
     const ac = new AbortController();
     const { startGateway } = await import('../src/gateway.js');
@@ -91,127 +79,8 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
         enabled: true,
         wsUrl: wsServer.wsUrl,
         httpUrl: 'http://x',
-        allowFrom: ['group:806966728'],
-        ignoreBots: true,
-        botMinIntervalSec: 60,
-        groupAutoReact: false,
-        groupAutoReactEmojiId: 1,
-        config: {},
-      }),
-      abortSignal: ac.signal,
-      cfg: {},
-      onReady: () => readyResolve(),
-      log: { info: () => {}, error: () => {}, debug: () => {} },
-    });
-
-    await readyP;
-
-    // First bot message is admitted (no inbound filter — full context).
-    runtimeState.state.lastDispatchArgs = null;
-    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot says hi'));
-    await vi.waitFor(() => {
-      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
-    }, { timeout: 5000 });
-
-    // Second message from the same bot is ALSO admitted (no inbound throttle).
-    runtimeState.state.lastDispatchArgs = null;
-    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot says again'));
-    await vi.waitFor(() => {
-      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
-    }, { timeout: 5000 });
-
-    ac.abort();
-    await runP;
-    await wsServer.close();
-  });
-
-  it('re-admits the same bot after the rate-limit interval elapses', async () => {
-    (globalThis.fetch as any).mockImplementation((url: string) => {
-      if (String(url).includes('/get_group_member_info')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ status: 'ok', retcode: 0, data: { is_robot: true } }),
-        });
-      }
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
-    });
-
-    const wsServer = await startMockOneBotWsServer();
-    const ac = new AbortController();
-    const { startGateway } = await import('../src/gateway.js');
-
-    let readyResolve!: () => void;
-    const readyP = new Promise<void>((r) => (readyResolve = r));
-
-    const runP = startGateway({
-      account: makeAccount({
-        accountId: 'default',
-        enabled: true,
-        wsUrl: wsServer.wsUrl,
-        httpUrl: 'http://x',
-        allowFrom: ['group:806966728'],
-        ignoreBots: true,
-        botMinIntervalSec: 1, // 1s window so the test can wait it out
-        groupAutoReact: false,
-        groupAutoReactEmojiId: 1,
-        config: {},
-      }),
-      abortSignal: ac.signal,
-      cfg: {},
-      onReady: () => readyResolve(),
-      log: { info: () => {}, error: () => {}, debug: () => {} },
-    });
-
-    await readyP;
-
-    // First message admitted.
-    runtimeState.state.lastDispatchArgs = null;
-    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot #1'));
-    await vi.waitFor(() => {
-      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
-    }, { timeout: 5000 });
-
-    // Wait past the 1s window; the next bot message is admitted again.
-    await new Promise((r) => setTimeout(r, 1500));
-    runtimeState.state.lastDispatchArgs = null;
-    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'bot #2 after interval'));
-    await vi.waitFor(() => {
-      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
-    }, { timeout: 5000 });
-
-    ac.abort();
-    await runP;
-    await wsServer.close();
-  });
-
-  it('forwards a group message from a non-bot member', async () => {
-    (globalThis.fetch as any).mockImplementation((url: string) => {
-      if (String(url).includes('/get_group_member_info')) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({ status: 'ok', retcode: 0, data: { is_robot: false } }),
-        });
-      }
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
-    });
-
-    const wsServer = await startMockOneBotWsServer();
-    const ac = new AbortController();
-    const { startGateway } = await import('../src/gateway.js');
-
-    let readyResolve!: () => void;
-    const readyP = new Promise<void>((r) => (readyResolve = r));
-
-    const runP = startGateway({
-      account: makeAccount({
-        accountId: 'default',
-        enabled: true,
-        wsUrl: wsServer.wsUrl,
-        httpUrl: 'http://x',
-        allowFrom: ['group:806966728'],
-        ignoreBots: true,
+        allowFrom: ['group:100200'],
+        ignoreFrom: ['10003'],
         groupAutoReact: false,
         groupAutoReactEmojiId: 1,
         config: {},
@@ -225,55 +94,13 @@ describe('gateway bot-loop guard (ignoreBots via is_robot)', () => {
     await readyP;
     runtimeState.state.lastDispatchArgs = null;
 
-    wsServer.sendToAll(makeGroupMsg(10001, 806966728, 'hello human'));
+    wsServer.sendToAll(makeGroupMsg(10003, 100200, 'ignored bot says hi'));
+    // Give the ingest path a beat, then assert nothing was dispatched.
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(runtimeState.state.lastDispatchArgs).toBeNull();
 
-    await vi.waitFor(() => {
-      expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
-    }, { timeout: 5000 });
-
-    ac.abort();
-    await runP;
-    await wsServer.close();
-  });
-
-  it('does not drop a message when the bot lookup fails (network error)', async () => {
-    (globalThis.fetch as any).mockImplementation((url: string) => {
-      if (String(url).includes('/get_group_member_info')) {
-        return Promise.reject(new Error('network down'));
-      }
-      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
-    });
-
-    const wsServer = await startMockOneBotWsServer();
-    const ac = new AbortController();
-    const { startGateway } = await import('../src/gateway.js');
-
-    let readyResolve!: () => void;
-    const readyP = new Promise<void>((r) => (readyResolve = r));
-
-    const runP = startGateway({
-      account: makeAccount({
-        accountId: 'default',
-        enabled: true,
-        wsUrl: wsServer.wsUrl,
-        httpUrl: 'http://x',
-        allowFrom: ['group:806966728'],
-        ignoreBots: true,
-        groupAutoReact: false,
-        groupAutoReactEmojiId: 1,
-        config: {},
-      }),
-      abortSignal: ac.signal,
-      cfg: {},
-      onReady: () => readyResolve(),
-      log: { info: () => {}, error: () => {}, debug: () => {} },
-    });
-
-    await readyP;
-    runtimeState.state.lastDispatchArgs = null;
-
-    wsServer.sendToAll(makeGroupMsg(10003, 806966728, 'flaky lookup'));
-
+    // A non-ignored member is still forwarded (same group, same window).
+    wsServer.sendToAll(makeGroupMsg(10001, 100200, 'hello human'));
     await vi.waitFor(() => {
       expect(runtimeState.state.lastDispatchArgs).not.toBeNull();
     }, { timeout: 5000 });

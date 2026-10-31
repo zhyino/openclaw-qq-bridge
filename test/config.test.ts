@@ -160,12 +160,12 @@ describe('config', () => {
         onebot: {
           wsUrl: 'ws://x',
           httpUrl: 'http://y',
-          groupAllowFrom: ['1007476107', 'group:200', 'private:111', '*'],
+          groupAllowFrom: ['10001', 'group:200', 'private:111', '*'],
         },
       },
     };
     const acct = resolveOneBotAccount(cfg as any, 'default');
-    expect(acct.allowFrom).toEqual(['group:1007476107', 'group:200', 'private:111', '*']);
+    expect(acct.allowFrom).toEqual(['group:10001', 'group:200', 'private:111', '*']);
   });
 
   it('resolveOneBotAccount: allowFrom takes precedence over legacy groupAllowFrom', () => {
@@ -175,7 +175,7 @@ describe('config', () => {
           wsUrl: 'ws://x',
           httpUrl: 'http://y',
           allowFrom: ['private:111'],
-          groupAllowFrom: ['1007476107'],
+          groupAllowFrom: ['10001'],
         },
       },
     };

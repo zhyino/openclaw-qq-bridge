@@ -24,8 +24,6 @@ export function makeAccount(
     replyAudit: true,
     qzoneWrite: false,
     muteSystemNotices: true,
-    ignoreBots: true,
-    botMinIntervalSec: 60,
     outboundRateLimit: 0,
     replyDelaySec: 0,
     config: {},

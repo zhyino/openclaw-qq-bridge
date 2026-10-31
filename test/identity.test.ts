@@ -14,7 +14,7 @@ function makeSummary(senderId: string, senderName: string, isGroup = true) {
       message_type: isGroup ? 'group' : 'private',
       message_id: 1,
       user_id: Number(senderId),
-      group_id: isGroup ? 806966728 : undefined,
+      group_id: isGroup ? 100200 : undefined,
       message: [{ type: 'text', data: { text: 'hi' } }],
       raw_message: 'hi',
       sender: { user_id: Number(senderId), nickname: senderName },
@@ -24,8 +24,8 @@ function makeSummary(senderId: string, senderName: string, isGroup = true) {
     isGroup,
     senderId,
     senderName,
-    peerId: isGroup ? `group:806966728` : `private:${senderId}`,
-    address: isGroup ? `onebot:group:806966728` : `onebot:private:${senderId}`,
+    peerId: isGroup ? `group:100200` : `private:${senderId}`,
+    address: isGroup ? `onebot:group:100200` : `onebot:private:${senderId}`,
     combinedText: 'hi',
     combinedImages: [],
     combinedRecordSegments: [],
@@ -51,7 +51,7 @@ describe('inbound sender identity (IsOwner / userLabels)', () => {
     const { ctxPayload } = buildInboundContext({
       pluginRuntime,
       cfg: {},
-      summary: makeSummary(OWNER, 'ℚ𝕨𝕪𝕜𝕠'),
+      summary: makeSummary(OWNER, '主人昵称'),
       accountId: 'default',
       accountAllowFrom: account.allowFrom,
       account,
@@ -60,7 +60,7 @@ describe('inbound sender identity (IsOwner / userLabels)', () => {
     });
 
     expect(ctxPayload.IsOwner).toBe(true);
-    expect(ctxPayload.SenderName).toBe('ℚ𝕨𝕪𝕜𝕠（主人）');
+    expect(ctxPayload.SenderName).toBe('主人昵称（主人）');
   });
 
   it('appends a configured userLabel for a non-owner', () => {
@@ -68,7 +68,7 @@ describe('inbound sender identity (IsOwner / userLabels)', () => {
     const { ctxPayload } = buildInboundContext({
       pluginRuntime,
       cfg: {},
-      summary: makeSummary(GF, '考拉'),
+      summary: makeSummary(GF, '女友昵称'),
       accountId: 'default',
       accountAllowFrom: account.allowFrom,
       account,
@@ -77,7 +77,7 @@ describe('inbound sender identity (IsOwner / userLabels)', () => {
     });
 
     expect(ctxPayload.IsOwner).toBe(false);
-    expect(ctxPayload.SenderName).toBe('考拉（女朋友）');
+    expect(ctxPayload.SenderName).toBe('女友昵称（女朋友）');
   });
 
   it('leaves the name untouched when no label matches', () => {
@@ -118,7 +118,7 @@ describe('inbound sender identity (IsOwner / userLabels)', () => {
     const { ctxPayload } = buildInboundContext({
       pluginRuntime,
       cfg: {},
-      summary: makeSummary(OWNER, 'ℚ𝕨𝕪𝕜𝕠', false),
+      summary: makeSummary(OWNER, '主人昵称', false),
       accountId: 'default',
       accountAllowFrom: account.allowFrom,
       account,

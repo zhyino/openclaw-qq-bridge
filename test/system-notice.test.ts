@@ -28,8 +28,11 @@ describe('isSystemNotice', () => {
     expect(isSystemNotice('💾 Learned: updated foo. Say "undo" to revert this skill change.')).toBe(true);
   });
 
-  it('matches the fixed "Say undo to revert" trailer anywhere in the text', () => {
-    expect(isSystemNotice('Foo. Say "undo" to revert this skill change.')).toBe(true);
+  it('does NOT match the \"Say undo to revert\" trailer when it is mid-sentence', () => {
+    // Anchored to the start of a 💾 Learned notice; user chat that merely
+    // mentions the phrase must not be silently swallowed (M-6).
+    expect(isSystemNotice('Foo. Say "undo" to revert this skill change.')).toBe(false);
+    expect(isSystemNotice('💾 Learned: updated foo. Say "undo" to revert this skill change.')).toBe(true);
   });
 
   it('matches empty/failed turn notifications from the host', () => {
@@ -84,9 +87,9 @@ describe('sendText — muteSystemNotices', () => {
 
   it('does not send the notice even when it targets the whitelisted group', async () => {
     const res = await sendText({
-      to: 'group:806966728',
+      to: 'group:100200',
       text: '[OpenClaw] Error: something broke',
-      account: mkAccount({ outboundAllow: ['group:806966728'] }),
+      account: mkAccount({ outboundAllow: ['group:100200'] }),
     });
 
     expect(res.error).toBeUndefined();
@@ -129,5 +132,37 @@ describe('sendText — muteSystemNotices', () => {
 
     expect(res.error).toBeUndefined();
     expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
+  });
+
+  it('sends a plugin diagnostic even when muted, when bypassMute is set (H-2)', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 11 } }),
+    });
+
+    const res = await sendText({
+      to: 'private:123',
+      text: '[OpenClaw] Error: agent exploded',
+      bypassMute: true,
+      account: mkAccount(),
+    });
+
+    expect(res.error).toBeUndefined();
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
+    expect(res.suppressed).toBeUndefined();
+  });
+
+  it('reports suppressed=system-notice instead of a fake success (H-2/M-3)', async () => {
+    const res = await sendText({
+      to: 'private:123',
+      text: '[OpenClaw] Request received, processing...',
+      account: mkAccount(),
+    });
+
+    expect(res.error).toBeUndefined();
+    expect(res.suppressed).toBe('system-notice');
+    expect((globalThis.fetch as any).mock.calls).toHaveLength(0);
   });
 });
