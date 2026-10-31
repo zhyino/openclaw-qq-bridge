@@ -86,4 +86,4 @@
 | --- | --- | --- |
 | P-1 | 不响应戳一戳：`notice` 事件只打 debug 日志就丢弃 | 新增 `pokeReply`（默认 true）：`notice/notify/poke` 且 `target_id == self_id` 时合成 `[戳一戳]` 入站消息，走完整 ingest（白名单/ignoreFrom/批处理/身份） |
 | P-2 | 会话被归档后永久失败（`Session ... is archived`），不产生新会话 | 新增每 peer **会话代数**（`~/.openclaw/qq-bridge-sessions.json`）：检测到 archived 错误 → 代数 +1 → 以 `<key>:g<N>` 重试一次，自动开新会话 |
-| P-3 | `[OpenClaw] Request received, processing...` 等诊断消息可能被出站限频静默吞掉 | 诊断消息统一 `bypassMute + exemptRateLimit`，保证错误/超时提示一定送达 |
+| P-3 | `[OpenClaw] Request received, processing...` 超时占位提示会发到聊天里，属于噪音 | 该占位提示**不再发送**，只记日志；真正的错误（`Error:` / `Processing failed:`）仍带 `bypassMute + exemptRateLimit` 送达 |

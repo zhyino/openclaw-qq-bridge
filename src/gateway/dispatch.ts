@@ -301,8 +301,10 @@ export function createBatchDispatcher(deps: DispatchDeps) {
           throw new SessionArchivedError(String(err instanceof Error ? err.message : err));
         }
         if (!hasResponse) {
-          log?.error(`${tag} no response within timeout`);
-          await sendErrorText("[OpenClaw] Request received, processing...");
+          // Log only: a "processing..." placeholder in the chat is noise, and
+          // the user already knows they sent a message. Real failures below
+          // still reach them.
+          log?.error(`${tag} no response within timeout (no placeholder sent)`);
         }
       }
     } catch (err) {
