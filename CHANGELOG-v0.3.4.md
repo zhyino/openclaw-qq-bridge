@@ -109,3 +109,15 @@
 | 问题 | 用户撤回消息后，插件仍会基于该消息回复（批处理窗口 + 回复延迟给了撤回足够时间） |
 | 修复 | 监听 `notice/group_recall` / `friend_recall`，记录 `message_id`（TTL 10 分钟，上限 500 条）；批处理前剔除已撤回消息，整批撤回则不产生 agent 轮次；回合进行中整批撤回则静默抑制回复 |
 | 测试 | `test/recall.test.ts`（4 例）：tracker 语义、批处理前剔除、回合中抑制 |
+
+---
+
+## 九、自检修复（2026-10-31 晚）
+
+| 编号 | 级别 | 问题 | 修复 |
+| --- | --- | --- | --- |
+| SC-1 | 高 | mention/sampled 群里，**已授权的斜杠命令**（`/reset`、`/new`）没 @ 机器人时被唤醒闸门吞掉（记录进 digest 但不派发） | 命令豁免唤醒闸门：`isCommand` 时永远唤醒 |
+| SC-2 | 中 | 出站限频窗口在**发送前**就记账——网络失败/retcode 失败也会消耗窗口，导致重试被限频 | 拆成 `isOutboundRateLimited`（只查）+ `markOutboundSent`（成功后记账） |
+| SC-3 | 中 | 未唤醒 digest 里包含**已撤回**的消息，下次唤醒会把撤回内容带给模型 | digest 条目带 `message_id`，`take()` 时用 RecallTracker 过滤 |
+| SC-4 | 中 | 「被@豁免限频」用 `combinedText.includes("[被@]")` 判断——digest 前缀里若含历史 @ 会误判豁免 | `BufferedMessage.directAddress` 标记（由当条消息本身计算），不再从拼接文本推断 |
+| SC-5 | 低 | poke 依赖 notice 事件的 `self_id`；若 OneBot 端省略该字段则戳一戳永远不响应 | 从 message 事件缓存 `selfId`，notice 缺字段时回退 |

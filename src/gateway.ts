@@ -80,6 +80,9 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
   let batcher: MessageBatcher | null = null;
   const wakeDigest = new WakeDigest();
   const recalls = new RecallTracker();
+  // Bot QQ id cached from message events: some OneBot servers omit self_id on
+  // notice events, and poke handling must still know who the target is.
+  let cachedSelfId: number | null = null;
 
   abortSignal.addEventListener("abort", () => {
     isAborted = true;
@@ -129,6 +132,8 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
    * the model as ordinary text.
    */
   const ingest = async (event: OneBotMessageEvent) => {
+    const selfIdNum = Number(event.self_id);
+    if (Number.isFinite(selfIdNum) && selfIdNum > 0) cachedSelfId = selfIdNum;
     const isGroup = event.message_type === "group";
     const senderId = String(event.user_id);
     const senderName = event.sender.card || event.sender.nickname || senderId;
@@ -188,26 +193,32 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     // Per-group wake policy (groups.<id>.wakePolicy / requireMention, or the
     // account default). Non-woken messages are recorded and folded into the
     // next wake as a short digest — zero model calls while not addressed.
+    // Slash commands are exempt: an authorised command must always run, even
+    // in a mention-only group (otherwise /reset would be silently swallowed).
+    const directAddress =
+      isGroup &&
+      isWakeMention({
+        text,
+        nickname: account.name,
+        isPoke: event.sub_type === "poke",
+      });
+    const isCommand = commandText.startsWith("/");
+
     let bodyText = text;
-    if (isGroup) {
+    if (isGroup && !isCommand) {
       const { policy, probability } = resolveWakePolicy(account, event.group_id!);
       if (policy === "all") {
         wakeDigest.clear(peerId);
       } else {
-        const mentioned = isWakeMention({
-          text,
-          nickname: account.name,
-          isPoke: event.sub_type === "poke",
-        });
-        const woken = mentioned || (policy === "sampled" && Math.random() < probability);
+        const woken = directAddress || (policy === "sampled" && Math.random() < probability);
         if (!woken) {
-          wakeDigest.record(peerId, `${senderName}: ${trimmedText}`);
+          wakeDigest.record(peerId, `${senderName}: ${trimmedText}`, event.message_id);
           log?.info(
             `${tag} group ${event.group_id} wake=${policy}: recorded without waking (${wakeDigest.size(peerId)} buffered)`,
           );
           return;
         }
-        const digest = wakeDigest.take(peerId);
+        const digest = wakeDigest.take(peerId, (id) => recalls.isRecalled(id));
         if (digest) bodyText = `${digest}\n${text}`;
       }
     }
@@ -231,6 +242,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     const buffered: BufferedMessage = {
       event,
       text: bodyText,
+      directAddress,
       images: extractImages(event.message),
       recordSegments: extractRecordSegments(event.message),
     };
@@ -263,7 +275,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
     if (!account.pokeReply) return;
     if (notice.notice_type !== "notify" || notice.sub_type !== "poke") return;
-    const selfId = Number(notice.self_id);
+    const selfId = Number(notice.self_id) || cachedSelfId || 0;
     const targetId = Number(notice.target_id);
     const userId = Number(notice.user_id);
     // Only a poke aimed at this bot matters; ignore pokes between other members.

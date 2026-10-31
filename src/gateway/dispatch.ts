@@ -135,8 +135,9 @@ export function createBatchDispatcher(deps: DispatchDeps) {
         `${tag} ctxPayload: From=${address}, SessionKey=${first.ctxPayload.SessionKey}, ChatType=${isGroup ? "group" : "direct"}, hasAudio=${voiceMedia.length > 0}`,
       );
 
+      const directAddress = live.some((m) => m.directAddress === true);
       try {
-        await runTurn(first.ctxPayload, summary, first.agentId);
+        await runTurn(first.ctxPayload, summary, first.agentId, directAddress);
       } catch (err) {
         if (!(err instanceof SessionArchivedError)) throw err;
         // The user archived this conversation: bump the generation and retry
@@ -147,7 +148,7 @@ export function createBatchDispatcher(deps: DispatchDeps) {
         );
         const retry = buildCtx();
         log?.info(`${tag} retry ctxPayload: SessionKey=${retry.ctxPayload.SessionKey}`);
-        await runTurn(retry.ctxPayload, summary, retry.agentId);
+        await runTurn(retry.ctxPayload, summary, retry.agentId, directAddress);
       }
     } finally {
       cleanupVoiceFiles(voiceFilePaths);
@@ -158,6 +159,7 @@ export function createBatchDispatcher(deps: DispatchDeps) {
     ctxPayload: Record<string, unknown>,
     summary: ReturnType<typeof summarizeBatch>,
     agentId: string,
+    exemptRateLimit = false,
   ): Promise<void> {
     const { isGroup, event, address } = summary;
     let archivedDetected = false;
@@ -272,9 +274,9 @@ export function createBatchDispatcher(deps: DispatchDeps) {
                 // "Must answer when @-ed": an inbound @-mention (or @all) exempts
                 // this reply from the outbound rate limit. Host-implicit
                 // replyToId does NOT count — every reply carries one by default.
-                exemptRateLimit:
-                  summary.combinedText.includes("[被@]") ||
-                  summary.combinedText.includes("[被@全体]"),
+                // Only a genuine inbound @/nickname/poke exempts the rate limit.
+                // Derived from the message itself, never from the digest prefix.
+                exemptRateLimit,
                 account,
               });
               if (sendResult?.error) {

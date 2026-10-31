@@ -104,7 +104,18 @@ function isOutboundRateLimited(
   if (exempt) return false;
   const now = Date.now();
   const last = outboundLastSent.get(to) ?? 0;
-  if (now - last < intervalSec * 1000) return true;
+  return now - last < intervalSec * 1000;
+}
+
+/**
+ * Start the rate-limit window for a target. Called only AFTER a send actually
+ * succeeded: a failed send (network error, OneBot retcode) must not consume the
+ * window, or the retry would be throttled away.
+ */
+function markOutboundSent(account: ResolvedOneBotAccount, to: string): void {
+  const intervalSec = account.outboundRateLimit;
+  if (!intervalSec) return;
+  const now = Date.now();
   outboundLastSent.set(to, now);
   // Opportunistic prune: drop entries older than the interval so the map stays
   // bounded by the number of targets that were active within the window.
@@ -113,7 +124,6 @@ function isOutboundRateLimited(
       if (now - ts >= intervalSec * 1000) outboundLastSent.delete(key);
     }
   }
-  return false;
 }
 
 // ── Transport ────────────────────────────────────────────────────────────────
@@ -385,6 +395,8 @@ export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
     }
 
     const data = result.data as { message_id?: number } | null;
+    // The send succeeded: only now does it consume the rate-limit window.
+    markOutboundSent(account, to);
     return {
       channel: "onebot",
       messageId: data?.message_id != null ? String(data.message_id) : undefined,

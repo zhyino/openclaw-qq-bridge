@@ -5,6 +5,8 @@ export interface BufferedMessage {
   text: string;
   images: string[];
   recordSegments: OneBotMessageSegment[];
+  /** True when this message directly addressed the bot (@ / nickname / poke). */
+  directAddress?: boolean;
 }
 
 interface PendingBatch {

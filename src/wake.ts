@@ -69,37 +69,49 @@ export function isWakeMention(params: {
  * Ring buffer of messages that arrived while the agent was not woken.
  * On the next wake the digest is prepended once, then cleared.
  */
+interface DigestEntry {
+  id?: number;
+  line: string;
+}
+
 export class WakeDigest {
-  private readonly buffers = new Map<string, string[]>();
+  private readonly buffers = new Map<string, DigestEntry[]>();
 
   constructor(
     private readonly maxMessages = 50,
     private readonly maxChars = 2000,
   ) {}
 
-  record(key: string, line: string): void {
+  record(key: string, line: string, messageId?: number): void {
     const trimmed = line.trim();
     if (!trimmed) return;
     const list = this.buffers.get(key) ?? [];
-    list.push(trimmed.slice(0, 200));
+    list.push({ id: messageId, line: trimmed.slice(0, 200) });
     while (list.length > this.maxMessages) list.shift();
     // Cap by characters too: drop oldest until the digest fits.
-    let total = list.reduce((sum, item) => sum + item.length + 1, 0);
+    let total = list.reduce((sum, item) => sum + item.line.length + 1, 0);
     while (total > this.maxChars && list.length > 1) {
       const dropped = list.shift();
-      total -= (dropped?.length ?? 0) + 1;
+      total -= (dropped?.line.length ?? 0) + 1;
     }
     this.buffers.set(key, list);
   }
 
-  /** Take and clear the digest for a key. Returns "" when nothing was recorded. */
-  take(key: string): string {
+  /**
+   * Take and clear the digest for a key. Returns "" when nothing was recorded.
+   * `isDropped` lets the caller filter entries that were recalled meanwhile.
+   */
+  take(key: string, isDropped?: (messageId: number) => boolean): string {
     const list = this.buffers.get(key);
     if (!list || list.length === 0) return "";
     this.buffers.delete(key);
+    const kept = isDropped
+      ? list.filter((entry) => entry.id == null || !isDropped(entry.id))
+      : list;
+    if (kept.length === 0) return "";
     return [
-      `[群聊未唤醒期间记录·最近 ${list.length} 条]`,
-      ...list,
+      `[群聊未唤醒期间记录·最近 ${kept.length} 条]`,
+      ...kept.map((entry) => entry.line),
       "[记录结束]",
     ].join("\n");
   }
