@@ -90,8 +90,45 @@ openclaw gateway restart
 | `qzoneWrite` | 是否启用 QQ 空间/资料**写**工具（发说说/点赞/评论/改签名） | `false` |
 | `groupAutoReact` | 群消息自动加 reaction | `false` |
 | `groupAutoReactEmojiId` | 自动 reaction 使用的表情 id | `1` |
+| `muteSystemNotices` | 静默丢弃系统通知（`[OpenClaw]` 前缀、`💾 Learned:` 等），不投递给 agent | `true` |
+| `ignoreBots` | 自动识别群内机器人（`get_group_member_info` 的 `is_robot`），机器人消息**限频**（见 `botMinIntervalSec`），避免两机器人互刷 | `true` |
+| `ignoreFrom` | 手动拉黑名单（QQ 号列表）：这些号的消息**完全丢弃**（不走网络查询，兜底 NTQQ 模拟的假机器人） | `[]` |
+| `botMinIntervalSec` | `ignoreBots` 开启时，同一机器人两条被放行消息的最小间隔（秒） | `60` |
+| `outboundRateLimit` | 出站限频：同一目标（群/私聊）最少间隔秒数内最多回一条，超出的静默丢弃。**被 @ / 显式引用时豁免**（保证「被@必回」） | `0`（不限） |
+| `replyDelaySec` | 回复前延迟的**基准秒数**，实际延迟随机取 `0.5x~1.5x`（让回复节奏自然、不机械） | `0`（不延迟） |
+| `userLabels` | 身份标签：`{"<QQ号>": "标签"}`，发送者名字会附上标签（如「昵称（主人）」），agent 能认出是谁 | `{}` |
 
 > `allowFrom` 与 `outboundAllow` 用的是**同一套匹配规则**：精确 id、`*`、以及类型通配 `group:*` / `private:*`。裸数字不会被当成 QQ 号（旧配置里的 `groupAllowFrom: ["123456"]` 会自动补成 `group:123456`）。
+
+### 身份识别（agent 怎么认出主人 / 女朋友）
+
+入站消息会附带 `IsOwner` 标记，发送者的名字会附上身份标签，agent 能区分「这是主人」「这是女朋友」还是陌生人：
+
+```json
+{
+  "channels": {
+    "onebot": {
+      "userLabels": { "10001": "主人", "10002": "女朋友" }
+    }
+  }
+}
+```
+
+- `ownerQQ` 配置的人自动标「主人」（即使不在 `userLabels` 里），优先于 `userLabels`
+- 其余匹配 `userLabels` 的发送者按配置标签显示，如「昵称（女朋友）」
+- 没有标签的发送者显示原始昵称，`IsOwner: false`
+
+### 防机器人互刷（群聊两机器人死循环）
+
+三层防护，从粗到细：
+
+| 层 | 配置 | 行为 |
+| --- | --- | --- |
+| 1. 手动拉黑 | `ignoreFrom: ["QQ号"]` | 这些号的消息**完全丢弃**（不走网络查询，兜底 NTQQ 模拟的假机器人） |
+| 2. 自动识别 | `ignoreBots: true`（默认） | 查 `get_group_member_info` 的 `is_robot`，机器人消息限频（`botMinIntervalSec` 秒内只放行第一条） |
+| 3. 出站限频 | `outboundRateLimit: 60` | 入站全放行，但同一目标 60 秒内最多回一条，超出的静默丢弃；**被 @ / 显式引用时豁免** |
+
+最外层还有 `outboundRateLimit` 兜底：即使前两层没拦住，机器人刷屏也最多一分钟一条。
 
 ### 媒体文件放在哪
 
@@ -200,7 +237,7 @@ npm run build      # tsc 编译到 dist/（发布/安装前需要）
 npm run pack:dry-run
 ```
 
-`npm test` 会先跑 vitest，再用 `scripts/check-test-count.mjs` 比对「实际跑过的测试文件数」与「磁盘上的测试文件数」——两者不一致直接失败，避免测试被漏跑而 CI 假绿。当前基线：20 个测试文件、218 个用例（Linux/macOS 全跑；Windows 无符号链接权限时 2 个用例自动跳过）。
+`npm test` 会先跑 vitest，再用 `scripts/check-test-count.mjs` 比对「实际跑过的测试文件数」与「磁盘上的测试文件数」——两者不一致直接失败，避免测试被漏跑而 CI 假绿。当前基线：**26 个测试文件、297 个用例**（Linux/macOS 全跑；Windows 无符号链接权限时 2 个用例自动跳过）。
 
 `npm run manifest:check` 校验 `src/types.ts` 的配置字段全部出现在 `openclaw.plugin.json` 的 schema 里。schema 是 `additionalProperties: false`，字段漏登记等于该配置项对用户不可写。
 
@@ -220,7 +257,7 @@ src/
     dispatch.ts     一个批次 = 一轮 agent，含投递与超时兜底
 ```
 
-CI 在 `.github/workflows/ci.yml`：Linux + Windows × Node 20/22 跑类型检查、构建、测试，另有一个生产依赖漏洞扫描任务。
+CI 在 `.github/workflows/ci.yml`：Linux + Windows × Node 22/24 跑类型检查、构建、测试，另有一个生产依赖漏洞扫描任务；`.github/workflows/secrets.yml` 每次 push 用 gitleaks 扫敏感信息（QQ 号 / 内网 IP / 微信 openid 等自定义规则见 `.gitleaks.toml`）。
 
 
 ## 致谢

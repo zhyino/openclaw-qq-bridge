@@ -23,6 +23,11 @@ regexes = [
   # e.g. ghp_abcdefghijklmnopqrstuvwxyz0123456789
   '''ghp_[a-z0-9]{30,40}''',
 ]
+paths = [
+  # Local vitest report (untracked, regenerated on every run); float durations
+  # like 0.5640970000 collide with the QQ-digit rule.
+  '''\.vitest-report\.json$''',
+]
 
 # ── Rules ─────────────────────────────────────────────────────────────────────
 
