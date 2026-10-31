@@ -121,3 +121,13 @@
 | SC-3 | 中 | 未唤醒 digest 里包含**已撤回**的消息，下次唤醒会把撤回内容带给模型 | digest 条目带 `message_id`，`take()` 时用 RecallTracker 过滤 |
 | SC-4 | 中 | 「被@豁免限频」用 `combinedText.includes("[被@]")` 判断——digest 前缀里若含历史 @ 会误判豁免 | `BufferedMessage.directAddress` 标记（由当条消息本身计算），不再从拼接文本推断 |
 | SC-5 | 低 | poke 依赖 notice 事件的 `self_id`；若 OneBot 端省略该字段则戳一戳永远不响应 | 从 message 事件缓存 `selfId`，notice 缺字段时回退 |
+
+---
+
+## 十、表情编码修复
+
+| 项 | 内容 |
+| --- | --- |
+| 问题 | agent 回复 `[表情:326]`（或任何表情文本）时 `buildMessage` 只认 `[CQ:face,id=N]` 格式，不认 `[表情:N]` 和 `[表情:名字]`，结果表情编码原样发给 QQ，QQ 显示为纯数字 |
+| 修复 | 正则新增 `[表情:数字]` 和 `[表情:名字]` 两种格式；名字用 `FACE_NAMES` 反向查找 id；未知名字退化为纯文本 |
+| 测试 | 新增 4 个 buildMessage 用例（数字、名字查找、混合排列、未知名字降级） |

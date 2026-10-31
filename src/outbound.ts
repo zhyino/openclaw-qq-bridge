@@ -21,6 +21,7 @@ import { basename, extname, isAbsolute, join, posix, relative, sep } from "node:
 import type { ResolvedOneBotAccount, OneBotApiResponse, OneBotMessageSegment } from "./types.js";
 import { assertOutboundAllowed, assertSafeMediaPath, isSystemNotice } from "./policy.js";
 import { parseTarget } from "./target.js";
+import { FACE_NAMES } from "./gateway/inbound.js";
 import {
   STAGED_MEDIA_DIRNAME,
   STAGED_MEDIA_MAX_AGE_MS,
@@ -331,7 +332,10 @@ export function buildMessage(text: string, replyToId?: string | null): OneBotMes
   if (!text.trim()) return segments;
 
   // One combined scan keeps segment order: text/face/at interleave correctly.
-  const RICH_RE = /\[CQ:face,\s*id=(\d+)\]|\[CQ:at,\s*qq=(\d+)\]|\[@(\d+)\]/gi;
+  // Supports both CQ code syntax ([CQ:face,id=N]) and the plugin's own
+  // text representation ([表情:N] / [表情:name]), which is what the agent
+  // sees when it receives a face segment and echoes it back.
+  const RICH_RE = /\[CQ:face,\s*id=(\d+)\]|\[CQ:at,\s*qq=(\d+)\]|\[@(\d+)\]|\[表情:(\d+)\]|\[表情:([^\]]+)\]/gi;
   let lastIndex = 0;
   let pendingText = "";
   let match: RegExpExecArray | null;
@@ -346,10 +350,24 @@ export function buildMessage(text: string, replyToId?: string | null): OneBotMes
   RICH_RE.lastIndex = 0;
   while ((match = RICH_RE.exec(text)) !== null) {
     pendingText += text.slice(lastIndex, match.index);
-    flushText();
     if (match[1] !== undefined) {
+      flushText();
       segments.push({ type: "face", data: { id: match[1] } });
+    } else if (match[4] !== undefined) {
+      flushText();
+      segments.push({ type: "face", data: { id: match[4] } });
+    } else if (match[5] !== undefined) {
+      // [表情:名字] — reverse-lookup the id; fall back to plain text.
+      const name = match[5].trim();
+      const found = Object.entries(FACE_NAMES).find(([, v]) => v === name);
+      if (found) {
+        flushText();
+        segments.push({ type: "face", data: { id: found[0] } });
+      } else {
+        pendingText += match[0];
+      }
     } else {
+      flushText();
       const qq = match[2] !== undefined ? match[2] : match[3];
       if (qq !== undefined) {
         segments.push({ type: "at", data: { qq } });
