@@ -197,6 +197,52 @@
             "type": "boolean",
             "default": true,
             "description": "React to QQ poke (戳一戳) as an inbound message when it targets the bot. Default true."
+          },
+          "wakePolicy": {
+            "type": "string",
+            "enum": [
+              "all",
+              "mention",
+              "sampled"
+            ],
+            "default": "all",
+            "description": "Default group wake policy: all = answer every allowed message; mention = only @/nickname/poke; sampled = mention + random wakeProbability."
+          },
+          "wakeProbability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Probability (0-1) that a non-mention group message wakes the agent when wakePolicy is sampled."
+          },
+          "groups": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "wakePolicy": {
+                  "type": "string",
+                  "enum": [
+                    "all",
+                    "mention",
+                    "sampled"
+                  ],
+                  "description": "all = answer every allowed message; mention = only @/nickname/poke; sampled = mention + random wakeProbability."
+                },
+                "wakeProbability": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Probability (0-1) that a non-mention message wakes the agent in a sampled group. Default 0.05."
+                },
+                "requireMention": {
+                  "type": "boolean",
+                  "description": "Host-native spelling of 'only answer when mentioned' (equivalent to wakePolicy=mention)."
+                }
+              },
+              "additionalProperties": true
+            },
+            "description": "Per-group overrides keyed by group id, or \"*\" for groups not listed."
           }
         },
         "additionalProperties": false,
@@ -447,6 +493,52 @@
                 "type": "boolean",
                 "default": true,
                 "description": "React to QQ poke (戳一戳) as an inbound message when it targets the bot. Default true."
+              },
+              "wakePolicy": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "mention",
+                  "sampled"
+                ],
+                "default": "all",
+                "description": "Default group wake policy: all = answer every allowed message; mention = only @/nickname/poke; sampled = mention + random wakeProbability."
+              },
+              "wakeProbability": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0.05,
+                "description": "Probability (0-1) that a non-mention group message wakes the agent when wakePolicy is sampled."
+              },
+              "groups": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "wakePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "all",
+                        "mention",
+                        "sampled"
+                      ],
+                      "description": "all = answer every allowed message; mention = only @/nickname/poke; sampled = mention + random wakeProbability."
+                    },
+                    "wakeProbability": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Probability (0-1) that a non-mention message wakes the agent in a sampled group. Default 0.05."
+                    },
+                    "requireMention": {
+                      "type": "boolean",
+                      "description": "Host-native spelling of 'only answer when mentioned' (equivalent to wakePolicy=mention)."
+                    }
+                  },
+                  "additionalProperties": true
+                },
+                "description": "Per-group overrides keyed by group id, or \"*\" for groups not listed."
               }
             },
             "additionalProperties": false

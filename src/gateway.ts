@@ -20,6 +20,7 @@ import { handleControlCommand } from "./owner-control.js";
 import { MessageBatcher, type BufferedMessage } from "./gateway/batch.js";
 import { extractImages, extractRecordSegments, extractText, stripStructuralPrefixes } from "./gateway/inbound.js";
 import { createBatchDispatcher, type BridgeLog } from "./gateway/dispatch.js";
+import { WakeDigest, isWakeMention, resolveWakePolicy } from "./wake.js";
 
 export {
   FACE_NAMES,
@@ -76,6 +77,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
   let isConnecting = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let batcher: MessageBatcher | null = null;
+  const wakeDigest = new WakeDigest();
 
   abortSignal.addEventListener("abort", () => {
     isAborted = true;
@@ -181,6 +183,33 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
       `${tag} ${isGroup ? "Group" : "Private"} message from ${senderName}(${senderId}) msg=${event.message_id}: ${text.slice(0, 100)}`,
     );
 
+    // Per-group wake policy (groups.<id>.wakePolicy / requireMention, or the
+    // account default). Non-woken messages are recorded and folded into the
+    // next wake as a short digest — zero model calls while not addressed.
+    let bodyText = text;
+    if (isGroup) {
+      const { policy, probability } = resolveWakePolicy(account, event.group_id!);
+      if (policy === "all") {
+        wakeDigest.clear(peerId);
+      } else {
+        const mentioned = isWakeMention({
+          text,
+          nickname: account.name,
+          isPoke: event.sub_type === "poke",
+        });
+        const woken = mentioned || (policy === "sampled" && Math.random() < probability);
+        if (!woken) {
+          wakeDigest.record(peerId, `${senderName}: ${trimmedText}`);
+          log?.info(
+            `${tag} group ${event.group_id} wake=${policy}: recorded without waking (${wakeDigest.size(peerId)} buffered)`,
+          );
+          return;
+        }
+        const digest = wakeDigest.take(peerId);
+        if (digest) bodyText = `${digest}\n${text}`;
+      }
+    }
+
     if (isGroup && account.groupAutoReact) {
       void reactToMessage(account, event.message_id, account.groupAutoReactEmojiId)
         .then((result) => {
@@ -199,7 +228,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
     const buffered: BufferedMessage = {
       event,
-      text,
+      text: bodyText,
       images: extractImages(event.message),
       recordSegments: extractRecordSegments(event.message),
     };

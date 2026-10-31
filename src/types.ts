@@ -1,6 +1,16 @@
 /**
  * OneBot 11 account configuration (raw config values)
  */
+/** Per-group wake overrides, keyed by group id or "*" (default for unlisted). */
+export interface OneBotGroupWakeConfig {
+  /** all = answer everything; mention = only @/nickname/poke; sampled = mention + probability. */
+  wakePolicy?: "all" | "mention" | "sampled";
+  /** Probability for sampled groups (0-1). Default 0.05. */
+  wakeProbability?: number;
+  /** Host-native spelling of "only when mentioned". */
+  requireMention?: boolean;
+}
+
 export interface OneBotAccountConfig {
   enabled?: boolean;
   name?: string;
@@ -52,6 +62,12 @@ export interface OneBotAccountConfig {
   replyDelaySec?: number;
   /** React to QQ "poke" (戳一戳) as an inbound message when it targets the bot. Default true. */
   pokeReply?: boolean;
+  /** Default group wake policy. Default "all" (answer every allowed message). */
+  wakePolicy?: "all" | "mention" | "sampled";
+  /** Probability used when wakePolicy is "sampled". Default 0.05. */
+  wakeProbability?: number;
+  /** Per-group wake overrides keyed by group id or "*". */
+  groups?: Record<string, OneBotGroupWakeConfig>;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -88,6 +104,12 @@ export interface ResolvedOneBotAccount {
   replyDelaySec: number;
   /** React to QQ "poke" (戳一戳) as an inbound message when it targets the bot. */
   pokeReply: boolean;
+  /** Default group wake policy. */
+  wakePolicy: "all" | "mention" | "sampled";
+  /** Probability used when wakePolicy is "sampled". */
+  wakeProbability: number;
+  /** Per-group wake overrides. */
+  groups?: Record<string, OneBotGroupWakeConfig>;
   config: OneBotAccountConfig;
 }
 

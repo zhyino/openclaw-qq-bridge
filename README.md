@@ -96,6 +96,9 @@ openclaw gateway restart
 | `replyDelaySec` | 回复前延迟的**基准秒数**，实际延迟随机取 `0.5x~1.5x`（让回复节奏自然、不机械） | `0`（不延迟） |
 | `userLabels` | 身份标签：`{"<QQ号>": "标签"}`，发送者名字会附上标签（如「昵称（主人）」），agent 能认出是谁 | `{}` |
 | `pokeReply` | 被戳一戳（poke）时是否当作一条入站消息处理 | `true` |
+| `wakePolicy` | 群聊默认唤醒策略：`all` 每条都回 / `mention` 只 @/昵称/戳才回 / `sampled` @必回+概率回 | `all` |
+| `wakeProbability` | `sampled` 策略下普通消息的唤醒概率（0-1） | `0.05` |
+| `groups` | **按群覆盖**：`{"<群号>": { "wakePolicy": "...", "wakeProbability": 0.1 }}`，`"*"` 表示未列出的群 | `{}` |
 
 > `allowFrom` 与 `outboundAllow` 用的是**同一套匹配规则**：精确 id、`*`、以及类型通配 `group:*` / `private:*`。裸数字不会被当成 QQ 号（旧配置里的 `groupAllowFrom: ["123456"]` 会自动补成 `group:123456`）。
 
@@ -127,6 +130,37 @@ openclaw gateway restart
 | 2. 出站限频 | `outboundRateLimit: 60` | 入站全放行（上下文完整），但同一目标 60 秒内最多回一条，超出的静默丢弃；**入站消息 @ 了机器人时豁免**（保证「被@必回」） |
 
 > 限频判据是「目标 + 时间窗」，不认宿主自动补的 replyToId——否则每条回复都带引用，限频永远不触发。
+
+### 按群唤醒策略（哪些群全回、哪些群随机回）
+
+群聊默认「每条都回」太耗 token，也容易过度插话。按群设置：
+
+```json
+{
+  "channels": {
+    "onebot": {
+      "wakePolicy": "all",
+      "groups": {
+        "100200": { "wakePolicy": "all" },
+        "100300": { "wakePolicy": "mention" },
+        "100400": { "wakePolicy": "sampled", "wakeProbability": 0.1 },
+        "*":      { "wakePolicy": "mention" }
+      }
+    }
+  }
+}
+```
+
+| 策略 | 行为 |
+| :--- | :--- |
+| `all` | 该群每条白名单消息都进 agent（历史行为） |
+| `mention` | 只有 @机器人 / 说到机器人昵称 / 戳一戳才进 agent |
+| `sampled` | 上述必醒，另外普通消息按 `wakeProbability` 概率唤醒 |
+
+- 未唤醒的消息**零模型调用**，只进环形缓冲（每群上限 50 条 / 2000 字）；下次真唤醒时，把「[群聊未唤醒期间记录·最近 N 条]」前缀拼进消息，上下文不断档。
+- `requireMention: true` 是 OpenClaw 原生写法，等价于 `wakePolicy: "mention"`。
+- 查找顺序：精确群号 → `"*"` → 账号默认 `wakePolicy`。私聊不受此策略影响（永远唤醒）。
+- 控制命令、@、戳一戳不受概率影响，永远优先。
 
 ### 戳一戳（poke）
 

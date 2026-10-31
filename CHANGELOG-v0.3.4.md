@@ -87,3 +87,15 @@
 | P-1 | 不响应戳一戳：`notice` 事件只打 debug 日志就丢弃 | 新增 `pokeReply`（默认 true）：`notice/notify/poke` 且 `target_id == self_id` 时合成 `[戳一戳]` 入站消息，走完整 ingest（白名单/ignoreFrom/批处理/身份） |
 | P-2 | 会话被归档后永久失败（`Session ... is archived`），不产生新会话 | 新增每 peer **会话代数**（`~/.openclaw/qq-bridge-sessions.json`）：检测到 archived 错误 → 代数 +1 → 以 `<key>:g<N>` 重试一次，自动开新会话 |
 | P-3 | `[OpenClaw] Request received, processing...` 超时占位提示会发到聊天里，属于噪音 | 该占位提示**不再发送**，只记日志；真正的错误（`Error:` / `Processing failed:`）仍带 `bypassMute + exemptRateLimit` 送达 |
+
+---
+
+## 七、按群唤醒策略（借 DSH dsh-qq-bridge 的唤醒模型）
+
+| 项 | 内容 |
+| --- | --- |
+| 动机 | 群聊每条消息都跑一轮 agent，token 消耗大且容易过度插话 |
+| 新增 | `wakePolicy`（`all`/`mention`/`sampled`）+ `wakeProbability` + `groups.<群号>` 按群覆盖；`requireMention: true` 兼容 OpenClaw 原生写法 |
+| 机制 | 未唤醒消息零模型调用，进环形缓冲（50 条/2000 字），下次唤醒时以「[群聊未唤醒期间记录·最近 N 条]」前缀注入，上下文不断档 |
+| 默认 | `all`（保持历史行为，不改变现有部署） |
+| 实现 | 复用 OpenClaw 的 `groups.<id>` 配置面，不新增平行配置体系 |

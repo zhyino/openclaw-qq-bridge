@@ -126,6 +126,13 @@ export function resolveOneBotAccount(
     outboundRateLimit: accountConfig.outboundRateLimit ?? 0,
     replyDelaySec: accountConfig.replyDelaySec ?? 0,
     pokeReply: accountConfig.pokeReply !== false,
+    wakePolicy:
+      accountConfig.wakePolicy === "mention" || accountConfig.wakePolicy === "sampled"
+        ? accountConfig.wakePolicy
+        : "all",
+    wakeProbability:
+      typeof accountConfig.wakeProbability === "number" ? accountConfig.wakeProbability : 0.05,
+    groups: accountConfig.groups,
     config: accountConfig,
   };
 }
