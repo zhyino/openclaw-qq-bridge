@@ -125,6 +125,7 @@ export function resolveOneBotAccount(
     userLabels: accountConfig.userLabels,
     outboundRateLimit: accountConfig.outboundRateLimit ?? 0,
     replyDelaySec: accountConfig.replyDelaySec ?? 0,
+    pokeReply: accountConfig.pokeReply !== false,
     config: accountConfig,
   };
 }

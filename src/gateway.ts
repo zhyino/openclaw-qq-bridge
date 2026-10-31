@@ -11,6 +11,7 @@ import type {
   ResolvedOneBotAccount,
   OneBotEvent,
   OneBotMessageEvent,
+  OneBotNoticeEvent,
 } from "./types.js";
 import { getOneBotRuntime } from "./runtime.js";
 import { reactToMessage, sendText as sendOutboundText } from "./outbound.js";
@@ -209,6 +210,43 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
     batcher?.push(batchKey, buffered);
   };
 
+  /**
+   * Handle OneBot notice events. Today that means QQ "poke" (戳一戳): when
+   * someone pokes the bot we synthesise an inbound message and run it through
+   * the same ingest path (whitelist, ignoreFrom, batching, identity) so the
+   * agent can react naturally. Everything else is ignored.
+   */
+  const handleNotice = (notice: OneBotNoticeEvent) => {
+    if (!account.pokeReply) return;
+    if (notice.notice_type !== "notify" || notice.sub_type !== "poke") return;
+    const selfId = Number(notice.self_id);
+    const targetId = Number(notice.target_id);
+    const userId = Number(notice.user_id);
+    // Only a poke aimed at this bot matters; ignore pokes between other members.
+    if (!selfId || !targetId || selfId !== targetId) return;
+    if (!userId) return;
+
+    const groupId = notice.group_id != null ? Number(notice.group_id) : undefined;
+    const pokeEvent: OneBotMessageEvent = {
+      post_type: "message",
+      message_type: groupId ? "group" : "private",
+      sub_type: "poke",
+      // Synthesised id: unique enough for batching/threading, not a real QQ id.
+      message_id: Math.abs(Date.now() ^ Math.trunc(Math.random() * 1e9)) || 1,
+      user_id: userId,
+      group_id: groupId,
+      message: [{ type: "text", data: { text: "[戳一戳]" } }],
+      raw_message: "[戳一戳]",
+      sender: { user_id: userId, nickname: String(userId) },
+      self_id: selfId,
+      time: notice.time ?? Math.trunc(Date.now() / 1000),
+    };
+    log?.info?.(
+      `${tag} poke from ${userId}${groupId ? ` in group ${groupId}` : ""} -> inbound`,
+    );
+    void ingest(pokeEvent);
+  };
+
   const connect = async () => {
     if (isConnecting) {
       log?.debug?.(`${tag} already connecting, skip`);
@@ -266,6 +304,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
               break;
             case "notice":
               log?.debug?.(`${tag} notice: ${(event as { notice_type?: string }).notice_type}`);
+              void handleNotice(event as OneBotNoticeEvent);
               break;
           }
         } catch (err) {

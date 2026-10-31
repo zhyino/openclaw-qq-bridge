@@ -95,6 +95,7 @@ openclaw gateway restart
 | `outboundRateLimit` | 出站限频：同一目标（群/私聊）最少间隔秒数内最多回一条，超出的静默丢弃。**被 @ / 显式引用时豁免**（保证「被@必回」） | `0`（不限） |
 | `replyDelaySec` | 回复前延迟的**基准秒数**，实际延迟随机取 `0.5x~1.5x`（让回复节奏自然、不机械） | `0`（不延迟） |
 | `userLabels` | 身份标签：`{"<QQ号>": "标签"}`，发送者名字会附上标签（如「昵称（主人）」），agent 能认出是谁 | `{}` |
+| `pokeReply` | 被戳一戳（poke）时是否当作一条入站消息处理 | `true` |
 
 > `allowFrom` 与 `outboundAllow` 用的是**同一套匹配规则**：精确 id、`*`、以及类型通配 `group:*` / `private:*`。裸数字不会被当成 QQ 号（旧配置里的 `groupAllowFrom: ["123456"]` 会自动补成 `group:123456`）。
 
@@ -126,6 +127,14 @@ openclaw gateway restart
 | 2. 出站限频 | `outboundRateLimit: 60` | 入站全放行（上下文完整），但同一目标 60 秒内最多回一条，超出的静默丢弃；**入站消息 @ 了机器人时豁免**（保证「被@必回」） |
 
 > 限频判据是「目标 + 时间窗」，不认宿主自动补的 replyToId——否则每条回复都带引用，限频永远不触发。
+
+### 戳一戳（poke）
+
+有人戳机器人时，插件把 `notice/notify/poke` 事件合成一条 `[戳一戳]` 入站消息，走与普通消息完全相同的路径（白名单、ignoreFrom、批处理、身份标签），agent 可以自然回应。只处理 `target_id == self_id`（戳的是本机器人）的事件，poke 之间互戳不触发。`pokeReply: false` 可关闭。
+
+### 会话归档后自动开新会话
+
+OpenClaw 拒绝在已归档的会话里启动新工作，而宿主对每个 peer 只派生一个固定 sessionKey。插件为此维护**每 peer 会话代数**（`~/.openclaw/qq-bridge-sessions.json`）：一旦收到 "is archived" 错误，就把该 peer 的代数 +1 并以 `<key>:g<N>` 重试一次，等于自动开一个新会话（不复活旧上下文）。归档 → 下一条消息就是全新会话。
 
 ### 媒体文件放在哪
 

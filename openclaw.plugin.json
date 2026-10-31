@@ -192,6 +192,11 @@
             "minimum": 0,
             "default": 0,
             "description": "Natural reply delay (seconds) before responding to an inbound batch, so replies do not feel machine-fast and quick follow-ups can join the same batch. Default 0 = no delay."
+          },
+          "pokeReply": {
+            "type": "boolean",
+            "default": true,
+            "description": "React to QQ poke (戳一戳) as an inbound message when it targets the bot. Default true."
           }
         },
         "additionalProperties": false,
@@ -437,6 +442,11 @@
                 "minimum": 0,
                 "default": 0,
                 "description": "Natural reply delay (seconds) before responding to an inbound batch, so replies do not feel machine-fast and quick follow-ups can join the same batch. Default 0 = no delay."
+              },
+              "pokeReply": {
+                "type": "boolean",
+                "default": true,
+                "description": "React to QQ poke (戳一戳) as an inbound message when it targets the bot. Default true."
               }
             },
             "additionalProperties": false

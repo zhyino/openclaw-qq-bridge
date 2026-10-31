@@ -3,6 +3,7 @@ import type { ResolvedOneBotAccount } from "../types.js";
 import { isSilent } from "../owner-control.js";
 import { redactSensitive } from "../policy.js";
 import { sendImage, sendRecord, sendText as sendOutboundText } from "../outbound.js";
+import { bumpSessionGeneration } from "../session-generation.js";
 import { cleanupVoiceFiles, processVoiceSegments } from "../voice.js";
 import type { BufferedMessage } from "./batch.js";
 import {
@@ -12,6 +13,18 @@ import {
   type OneBotRuntime,
   type VoiceMedia,
 } from "./inbound.js";
+
+/**
+ * The host refuses to run new work in an archived session. dispatchBatch
+ * catches this, rotates the per-peer session generation and retries once —
+ * archiving a conversation then simply starts a fresh one on the next message.
+ */
+export class SessionArchivedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SessionArchivedError";
+  }
+}
 
 export interface BridgeLog {
   info: (msg: string) => void;
@@ -89,8 +102,8 @@ export function createBatchDispatcher(deps: DispatchDeps) {
       summary.combinedRecordSegments.length,
     );
 
-    try {
-      const { ctxPayload, agentId } = buildInboundContext({
+    const buildCtx = () =>
+      buildInboundContext({
         pluginRuntime,
         cfg,
         summary,
@@ -101,11 +114,27 @@ export function createBatchDispatcher(deps: DispatchDeps) {
         voiceMedia,
       });
 
+    try {
+      const first = buildCtx();
+
       log?.info(
-        `${tag} ctxPayload: From=${address}, SessionKey=${ctxPayload.SessionKey}, ChatType=${isGroup ? "group" : "direct"}, hasAudio=${voiceMedia.length > 0}`,
+        `${tag} ctxPayload: From=${address}, SessionKey=${first.ctxPayload.SessionKey}, ChatType=${isGroup ? "group" : "direct"}, hasAudio=${voiceMedia.length > 0}`,
       );
 
-      await runTurn(ctxPayload, summary, agentId);
+      try {
+        await runTurn(first.ctxPayload, summary, first.agentId);
+      } catch (err) {
+        if (!(err instanceof SessionArchivedError)) throw err;
+        // The user archived this conversation: bump the generation and retry
+        // once against a brand-new session instead of failing forever.
+        const generation = bumpSessionGeneration(summary.peerId);
+        log?.warn?.(
+          `${tag} session archived; rotating ${summary.peerId} to generation ${generation} and retrying`,
+        );
+        const retry = buildCtx();
+        log?.info(`${tag} retry ctxPayload: SessionKey=${retry.ctxPayload.SessionKey}`);
+        await runTurn(retry.ctxPayload, summary, retry.agentId);
+      }
     } finally {
       cleanupVoiceFiles(voiceFilePaths);
     }
@@ -117,15 +146,25 @@ export function createBatchDispatcher(deps: DispatchDeps) {
     agentId: string,
   ): Promise<void> {
     const { isGroup, event, address } = summary;
+    let archivedDetected = false;
+    const isArchivedError = (err: unknown) =>
+      /is archived/i.test(err instanceof Error ? err.message : String(err));
 
     const sendErrorText = async (raw: string) => {
       // Redact rather than drop: blocking the error message leaves the user
       // with silence AND no diagnostic, which is strictly worse.
       // bypassMute: these are OUR diagnostics, not host-injected notices — a
       // muteSystemNotices default must not swallow them.
+      // exemptRateLimit: a diagnostic the user needs must not be throttled away.
       const text = redactSensitive(raw).slice(0, 300);
       try {
-        const result = await sendOutboundText({ to: address, text, account, bypassMute: true });
+        const result = await sendOutboundText({
+          to: address,
+          text,
+          account,
+          bypassMute: true,
+          exemptRateLimit: true,
+        });
         if (result?.error) {
           log?.warn?.(`${tag} error notice blocked/failed: ${result.error}`);
         }
@@ -231,6 +270,17 @@ export function createBatchDispatcher(deps: DispatchDeps) {
             }
           },
           onError: async (err: unknown) => {
+            if (isArchivedError(err)) {
+              // Not a user-visible failure: the session was archived. Mark it so
+              // dispatchBatch rotates to a fresh generation and retries.
+              archivedDetected = true;
+              hasResponse = true;
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+              }
+              return;
+            }
             log?.error(`${tag} dispatch error: ${err}`);
             hasResponse = true;
             if (timeoutId) {
@@ -245,14 +295,20 @@ export function createBatchDispatcher(deps: DispatchDeps) {
 
       try {
         await Promise.race([dispatchPromise, timeoutPromise]);
-      } catch {
+      } catch (err) {
         if (timeoutId) clearTimeout(timeoutId);
+        if (archivedDetected || isArchivedError(err)) {
+          throw new SessionArchivedError(String(err instanceof Error ? err.message : err));
+        }
         if (!hasResponse) {
           log?.error(`${tag} no response within timeout`);
           await sendErrorText("[OpenClaw] Request received, processing...");
         }
       }
     } catch (err) {
+      // Let dispatchBatch rotate the session generation instead of reporting a
+      // failure the user cannot act on.
+      if (err instanceof SessionArchivedError) throw err;
       log?.error(`${tag} message processing failed: ${err}`);
       await sendErrorText(`[OpenClaw] Processing failed: ${String(err).slice(0, 500)}`);
     }

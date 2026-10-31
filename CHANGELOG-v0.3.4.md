@@ -77,3 +77,13 @@
 
 - 所有新字段默认值保持旧行为（关闭/宽松），老配置无需改动。
 - `muteSystemNotices` 默认 `true`：如果之前希望系统通知进 agent，需显式设 `false`。
+
+---
+
+## 六、后续修复（2026-10-31 下午）
+
+| 项 | 问题 | 修复 |
+| --- | --- | --- |
+| P-1 | 不响应戳一戳：`notice` 事件只打 debug 日志就丢弃 | 新增 `pokeReply`（默认 true）：`notice/notify/poke` 且 `target_id == self_id` 时合成 `[戳一戳]` 入站消息，走完整 ingest（白名单/ignoreFrom/批处理/身份） |
+| P-2 | 会话被归档后永久失败（`Session ... is archived`），不产生新会话 | 新增每 peer **会话代数**（`~/.openclaw/qq-bridge-sessions.json`）：检测到 archived 错误 → 代数 +1 → 以 `<key>:g<N>` 重试一次，自动开新会话 |
+| P-3 | `[OpenClaw] Request received, processing...` 等诊断消息可能被出站限频静默吞掉 | 诊断消息统一 `bypassMute + exemptRateLimit`，保证错误/超时提示一定送达 |

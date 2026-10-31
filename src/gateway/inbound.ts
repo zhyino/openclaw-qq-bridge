@@ -3,6 +3,7 @@ import { formatInboundEnvelope } from "openclaw/plugin-sdk/channel-inbound";
 import type { OneBotMessageEvent, OneBotMessageSegment } from "../types.js";
 import type { ResolvedOneBotAccount } from "../types.js";
 import { isOwner } from "../policy.js";
+import { applySessionGeneration, getSessionGeneration } from "../session-generation.js";
 import type { BufferedMessage } from "./batch.js";
 
 /** Type-only handle on the plugin runtime (no runtime import: keeps mocking simple). */
@@ -380,6 +381,11 @@ export function buildInboundContext(params: InboundContextParams): {
     peer: { kind: isGroup ? "group" : "direct", id: peerId },
   });
 
+  // The host blocks work on archived sessions and derives one fixed key per
+  // peer. After a user archives the conversation, every message would fail
+  // forever; a bumped generation routes to `<key>:g<N>` (a fresh session).
+  const sessionKey = applySessionGeneration(route.sessionKey, getSessionGeneration(peerId));
+
   const formatted = formatInboundEnvelope({
     channel: "OneBot",
     from: labelledName,
@@ -405,7 +411,7 @@ export function buildInboundContext(params: InboundContextParams): {
     CommandBody: combinedText,
     From: address,
     To: address,
-    SessionKey: route.sessionKey,
+    SessionKey: sessionKey,
     AccountId: route.accountId,
     ChatType: isGroup ? "group" : "direct",
     SenderId: senderId,

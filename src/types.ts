@@ -50,6 +50,8 @@ export interface OneBotAccountConfig {
   outboundRateLimit?: number;
   /** Natural reply delay (seconds) before responding to an inbound batch. Default 0 = no delay. */
   replyDelaySec?: number;
+  /** React to QQ "poke" (戳一戳) as an inbound message when it targets the bot. Default true. */
+  pokeReply?: boolean;
   /** QQ/NapCat emoji id used for automatic group reactions */
   groupAutoReactEmojiId?: string | number;
 }
@@ -84,6 +86,8 @@ export interface ResolvedOneBotAccount {
   outboundRateLimit: number;
   /** Natural reply delay (seconds) before responding to an inbound batch. Default 0 = no delay. */
   replyDelaySec: number;
+  /** React to QQ "poke" (戳一戳) as an inbound message when it targets the bot. */
+  pokeReply: boolean;
   config: OneBotAccountConfig;
 }
 
