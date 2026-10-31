@@ -41,7 +41,7 @@ describe('gateway reply delay (replyDelaySec)', () => {
     vi.restoreAllMocks();
   });
 
-  it('delays the dispatch by the configured seconds', async () => {
+  it('delays the dispatch by ~the configured seconds (random 0.5x-1.5x)', async () => {
     const wsServer = await startMockOneBotWsServer();
     const ac = new AbortController();
     const { startGateway } = await import('../src/gateway.js');
@@ -78,7 +78,9 @@ describe('gateway reply delay (replyDelaySec)', () => {
     }, { timeout: 8000 });
 
     const elapsed = Date.now() - t0;
-    expect(elapsed).toBeGreaterThanOrEqual(1800); // >= ~2s delay
+    // 2s base -> random 1-3s + ~1.5s batch window + dispatch overhead
+    expect(elapsed).toBeGreaterThanOrEqual(900);
+    expect(elapsed).toBeLessThanOrEqual(5000);
 
     ac.abort();
     await runP;

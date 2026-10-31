@@ -58,10 +58,14 @@ export function createBatchDispatcher(deps: DispatchDeps) {
 
     // Optional natural reply delay: waits before the agent turn starts, so a
     // quick follow-up message is more likely to join this batch and the reply
-    // does not feel machine-fast. Configurable per account via replyDelaySec.
+    // does not feel machine-fast. replyDelaySec is the BASE; the actual delay
+    // is a random 0.5x-1.5x jitter of it, so consecutive replies never have
+    // the exact same cadence. Configurable per account via replyDelaySec.
     if (account.replyDelaySec > 0) {
-      log?.info(`${tag} reply delay ${account.replyDelaySec}s before dispatching batch from ${senderName}`);
-      await new Promise((resolve) => setTimeout(resolve, account.replyDelaySec * 1000));
+      const baseMs = account.replyDelaySec * 1000;
+      const delayMs = Math.round(baseMs * (0.5 + Math.random()));
+      log?.info(`${tag} reply delay ${(delayMs / 1000).toFixed(1)}s before dispatching batch from ${senderName}`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
     pluginRuntime.channel.activity.record({
